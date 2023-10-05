@@ -74,7 +74,7 @@ def AddEdges(graphin,nrneighbors=3,pos='coord',refdistance=1):
                 # to compute the edge weight 
                 graphin.edges[(iter_i,iter_j)]["weight"] = np.exp(-LA.norm(tmp_data[iter_i,:]-tmp_data[iter_j,:],2)/refdistance)
                 
-
+                
 def FedRelax(G, Xtest, regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
