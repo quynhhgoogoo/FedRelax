@@ -4,8 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+# RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install numpy scikit-learn matplotlib networkx
 
 COPY . /app
 
-CMD ["python", "fedrelax.py"]
+CMD ["python", "fed_relax.py"]

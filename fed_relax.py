@@ -82,6 +82,7 @@ def FedRelax(G, Xtest, regparam=0, maxiter=100):
     # Attach a DecisionTreeRegressor as the local model to each node in G
     for node_i in G.nodes(data=False): 
         G.nodes[node_i]["model"] = DecisionTreeRegressor(max_depth=4).fit(G.nodes[node_i]["Xtrain"], G.nodes[node_i]["ytrain"])
+        G.nodes[node_i]["sample_weight"] = np.ones((len(G.nodes[node_i]["ytrain"]), 1))  # Initialize sample weights
     
     # Repeat the local updates (simultaneously at all nodes) for maxiter iterations
     for iter_GD in range(maxiter):
@@ -114,9 +115,9 @@ PlotGraph(G,pos='coords',annotate='name')
 X_test = np.arange(0.0, 1, 0.1)[:, np.newaxis]
 # get the start time
 st = time.time()
-FedRelaxDT(G,X_test,0.1,100)
+FedRelax(G,X_test,0.1,100)
 end = time.time()
-print("runtime of FedRelaxDT ",end-st)
+print("runtime of FedRelax ",end-st)
 
 # compute node-wise train and val errors 
 
