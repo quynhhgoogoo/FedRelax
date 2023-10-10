@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fedrelax-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fedrelax
+  template:
+    metadata:
+      labels:
+        app: fedrelax
+    spec:
+      containers:
+      - name: fedrelax-app
+        image: fedrelax:latest  # Use the image name from the Docker build
+        ports:
+        - containerPort: 80
