@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: fedrelax-service
+  name: pod-service
 spec:
   selector:
     app: fedrelax
   ports:
-    - protocol: "TCP"
+    - protocol: TCP
       port: 80
       targetPort: 80
-  type: NodePort
+  type: ClusterIP
