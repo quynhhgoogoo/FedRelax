@@ -1,5 +1,6 @@
 from sklearn.linear_model import LogisticRegression
 import numpy as np
+import pandas as pd
 import os
 from kubernetes import client, config
 import socket
@@ -42,8 +43,12 @@ def receive_from_pod(pod_index, pod_ip):
 
     return data
 
-# Pod 1's local data
-X1, y1 = generate_local_data()
+# Load train data to the pod
+df = pd.read_csv("train.csv")
+# Only load a part of data to current pod 
+df = df.iloc[:1000,:]
+X1 = df['tweet'].to_numpy()
+y1 = df['label'].to_numpy().reshape(-1,)
 local_model = LogisticRegression()
 local_model.fit(X1, y1)
 
