@@ -1,6 +1,7 @@
 from sklearn.linear_model import LogisticRegression
 import numpy as np
 import pandas as pd
+from sklearn.metrics import accuracy_score
 import os
 from kubernetes import client, config
 import socket
@@ -44,7 +45,7 @@ def receive_from_pod(pod_index, pod_ip):
     return data
 
 # Load train data to the pod
-df = pd.read_csv("train.csv")
+df = pd.read_csv("data/train.csv")
 # Only load a part of data to current pod 
 df = df.iloc[:1000,:]
 X1 = df['tweet'].to_numpy()
@@ -78,3 +79,21 @@ for iteration in range(num_iterations):
     local_model.fit(X1, y1)
 
 # Final global model is in global_model_weights
+
+# Evaluate model
+test_df = pd.read_csv("test.csv")
+X_test = test_df['tweet'].to_numpy()
+y_test = test_df['label'].to_numpy().reshape(-1,)
+
+# Initialize a list to store local evaluation results
+local_evaluation_results = []
+
+# Evaluate local models
+for i in range(num_pods):
+    # Assuming 'local_model' is your trained model in each pod
+    y_pred = local_model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+
+    # Print or store the local evaluation result
+    print(f"Local Accuracy for Pod {i}: {accuracy}")
+    local_evaluation_results.append(accuracy)
