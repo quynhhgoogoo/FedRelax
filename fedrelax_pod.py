@@ -8,6 +8,7 @@ import socket
 import random
 import time
 import threading
+import joblib
 
 # Get all pod's ip in namespace
 def get_pod_ip_addresses():
