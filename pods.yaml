@@ -9,7 +9,8 @@ metadata:
 spec:
   containers:
   - name: fedrelax-container
-    image: fedrelax
+    image: fedrelax:latest
+    imagePullPolicy: Always
 
 ---
 
@@ -24,4 +25,5 @@ metadata:
 spec:
   containers:
   - name: fedrelax-container
-    image: fedrelax  
+    image: fedrelax:latest
+    imagePullPolicy: Always  

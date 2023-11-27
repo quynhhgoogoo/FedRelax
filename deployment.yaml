@@ -13,7 +13,7 @@ spec:
         app: fedrelax
     spec:
       containers:
-      - name: fedrelax-app
+      - name: fedrelax-container
         image: fedrelax-app:latest
         ports:
         - containerPort: 80
