@@ -1,4 +1,4 @@
-FROM python:3.8
+FROM python:3.9
 
 WORKDIR /app
 
@@ -6,6 +6,8 @@ WORKDIR /app
 
 COPY fedrelax_pod.py /app/
 COPY data/ /app/data/
+# Test, will be removed later
+COPY hello.py /app/
 
 # RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install numpy scikit-learn matplotlib kubernetes

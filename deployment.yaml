@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: fedrelax-container
-        image: fedrelax-app:latest
+        image: python:3.9
         ports:
         - containerPort: 80

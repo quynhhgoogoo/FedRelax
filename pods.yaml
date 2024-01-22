@@ -9,7 +9,8 @@ metadata:
 spec:
   containers:
   - name: fedrelax-container
-    image: fedrelax:latest
+    image: python:3.9
+    command: ["python", "-u", "/app/hello.py"]
     imagePullPolicy: Always
 
 ---
@@ -25,5 +26,8 @@ metadata:
 spec:
   containers:
   - name: fedrelax-container
-    image: fedrelax:latest
-    imagePullPolicy: Always  
+    image: python:3.9
+    command: ["python", "-u", "/app/hello.py"]
+    imagePullPolicy: Always
+  imagePullSecrets:
+  - name: regcred 
