@@ -1,9 +1,8 @@
-from ipaddress import ip_address
 from kubernetes import client, config
 
 # Get all pod's ip in namespace
 def get_pod_ip_addresses():
-    config.load_kube_config()  # Load your Kubernetes configuration (e.g., ~/.kube/config)
+    config.load_incluster_config()  # Load in-cluster Kubernetes configuration
 
     v1 = client.CoreV1Api()
 
@@ -15,5 +14,5 @@ def get_pod_ip_addresses():
 
     return pod_ip_addresses
 
-ip_addresses =  get_pod_ip_addresses()
+ip_addresses = get_pod_ip_addresses()
 print(ip_addresses)
