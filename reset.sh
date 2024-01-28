@@ -1,11 +1,20 @@
+# Restart minikube
+# minikube stop
+# minikube start
+
 # Amateur clean
 kubectl delete ns fed-relax
 kubectl create ns fed-relax
+docker images
+
+# Clean latest image
+docker rmi quynhhgoogoo/fed-relax
 
 # Build the images
-docker build -t fed-relax .
-docker tag fed-relax quynhhgoogoo/fed-relax
-docker push quynhhgoogoo/fed-relax
+docker build -t quynhhgoogoo/fed-relax .
+docker tag fed-relax quynhhgoogoo/fed-relax:latest
+docker push quynhhgoogoo/fed-relax:latest
+docker run --rm -it quynhhgoogoo/fed-relax:latest ls /app
 
 # Provide credentials
 #read -p 'Username: ' uservar
@@ -21,3 +30,5 @@ kubectl apply -f service.yaml
 kubectl apply -f pods.yaml 
 kubectl get pods -n fed-relax
 kubectl config set-context --current --namespace=fed-relax
+
+# kubectl get pod pod1 -n fed-relax -o=jsonpath='{.status.containerStatuses[*].state.terminated.exitCode}'
