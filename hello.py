@@ -34,10 +34,10 @@ def get_pod_ip_addresses():
 
 peer_ips = get_pod_ip_addresses() 
 peer_port = 8000
-
+print("Peers IP addresses", peer_ips)
 
 # Initialize global model weights as the local model's weights
-global_model_weights = "test"
+global_model_weights = 10
 
 # Number of pods
 num_pods = 2
@@ -49,9 +49,10 @@ for iteration in range(num_iterations):
     # Share and receive global model weights from other pods
     for i, pod_id in enumerate(peer_ips):
         # Send your global model weights to another pods
-        send_to_pod(i, pod_id, global_model_weights)
+        print("Sending data to:", peer_ips[pod_id])
+        send_to_pod(i, peer_ips[pod_id], global_model_weights)
         # Receive the global model weights from another pod
-        received_weights = receive_from_pod(i, pod_id)
+        received_weights = receive_from_pod(i, peer_ips[pod_id])
         # Update your global model weights based on received_weights
         global_model_weights = (global_model_weights + received_weights) / 2  # You can adjust this aggregation method
 

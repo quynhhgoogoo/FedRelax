@@ -2,8 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fedrelax-deployment
+  namespace: fed-relax
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: fedrelax
@@ -12,8 +13,11 @@ spec:
       labels:
         app: fedrelax
     spec:
+      restartPolicy: Always
       containers:
       - name: fedrelax-container
-        image: quynhhgoogoo/fed-relax
-        ports:
-        - containerPort: 80
+        image: quynhhgoogoo/fed-relax:latest
+        command: ["python", "-u", "/app/hello.py"]
+        imagePullPolicy: Always
+      imagePullSecrets:
+      - name: regcred
