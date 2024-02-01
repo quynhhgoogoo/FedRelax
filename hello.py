@@ -56,5 +56,5 @@ for iteration in range(num_iterations):
         global_model_weights = (global_model_weights + received_weights) / 2  # You can adjust this aggregation method
 
     # Update your local model with the global weights
-    local_model.coef_ = global_model_weights
-    local_model.fit(X1, y1)
+    # local_model.coef_ = global_model_weights
+    # local_model.fit(X1, y1)

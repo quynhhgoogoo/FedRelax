@@ -7,10 +7,11 @@ metadata:
   labels:
     app: fedrelax
 spec:
+  restartPolicy: Always
   containers:
   - name: fedrelax-container
     image: quynhhgoogoo/fed-relax:latest
-    command: ["python", "-u", "/app/hellu.py"]
+    command: ["python", "-u", "/app/hello.py"]
     imagePullPolicy: Always
 
 ---
@@ -24,10 +25,11 @@ metadata:
   labels:
     app: fedrelax
 spec:
+  restartPolicy: Always
   containers:
   - name: fedrelax-container
     image: quynhhgoogoo/fed-relax:latest
-    command: ["python", "-u", "/app/hellu.py"]
+    command: ["python", "-u", "/app/hello.py"]
     imagePullPolicy: Always
   imagePullSecrets:
   - name: regcred 
