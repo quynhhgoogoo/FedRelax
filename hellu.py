@@ -1,0 +1,103 @@
+from kubernetes import client, config
+import socket
+import time
+
+def send_to_pod(pod_index, pod_ip, model_params):
+    # Allow pods to send parameters to other pods in the same ns
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((pod_ip, peer_port))
+    client_socket.send(str(model_params).encode())
+    print(f"Send to pod {pod_index} received: {str(model_params).encode()}")
+
+
+def receive_from_pod(pod_index, pod_ip):
+    # Allow pods to receive parameters from other pods in same ns
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((pod_ip, peer_port))
+    data = client_socket.recv(1024)
+    print(f"Pod {pod_index} received: {data.decode()}")
+
+    return data
+
+def connect_with_retry(pod_ip):
+    max_retries = 5
+    retry_delay = 5
+
+    for retry in range(max_retries):
+        try:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.connect((pod_ip, peer_port))
+            return client_socket
+        except Exception as e:
+            print(f"Retry {retry + 1}/{max_retries}: {e}")
+            time.sleep(retry_delay)
+
+    raise Exception("Unable to establish connection after multiple retries.")
+
+def is_pod_ready(pod_name):
+    v1 = client.CoreV1Api()
+    pod_status = v1.read_namespaced_pod_status(name=pod_name, namespace="fed-relax")
+    return pod_status.status.phase == "Running" and all(c.ready for c in pod_status.status.container_statuses)
+
+def wait_for_pods_ready():
+    v1 = client.CoreV1Api()
+    while True:
+        ready_pods = [pod.metadata.name for pod in v1.list_namespaced_pod(namespace="fed-relax").items if is_pod_ready(pod.metadata.name)]
+        if len(ready_pods) == num_pods:
+            print("All pods are ready.")
+            break
+        else:
+            print(f"Waiting for pods to be ready. Ready pods: {ready_pods}")
+            time.sleep(5)
+
+# Wait for all pods ready before starting the communication
+wait_for_pods_ready()
+
+
+# Get all pod's ip in namespace
+def get_pod_ip_addresses():
+    config.load_incluster_config()  # Load in-cluster Kubernetes configuration
+
+    v1 = client.CoreV1Api()
+
+    pod_ip_addresses = {}
+    pods = v1.list_namespaced_pod(namespace="fed-relax")
+
+    for pod in pods.items:
+        pod_ip_addresses[pod.metadata.name] = pod.status.pod_ip
+
+    return pod_ip_addresses
+
+peer_ips = get_pod_ip_addresses() 
+peer_port = 8000
+print("Peers IP addresses", peer_ips)
+
+# Initialize global model weights as the local model's weights
+global_model_weights = 10
+
+# Number of pods
+num_pods = 2
+
+# Number of iterations for FedRelax
+num_iterations = 10
+
+for iteration in range(num_iterations):
+    # Share and receive global model weights from other pods
+    for i, pod_id in enumerate(peer_ips):
+        print(i, pod_id)
+        if is_pod_ready(pod_id):
+            client_socket = connect_with_retry(peer_ips[pod_id])
+            # Send your global model weights to another pods
+            print("Sending data to:", peer_ips[pod_id])
+            send_to_pod(i, peer_ips[pod_id], global_model_weights)
+            # Receive the global model weights from another pod
+            received_weights = receive_from_pod(i, peer_ips[pod_id])
+            # Update your global model weights based on received_weights
+            global_model_weights = (global_model_weights + received_weights) / 2  # You can adjust this aggregation method
+        
+        else:
+            print(f"Pod {pod_id} is not ready. Skipping.")
+
+    # Update your local model with the global weights
+    # local_model.coef_ = global_model_weights
+    # local_model.fit(X1, y1)
