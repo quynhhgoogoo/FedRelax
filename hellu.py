@@ -66,14 +66,6 @@ print(f"Current context: {current_context}")
 dns_output = subprocess.check_output(["cat", "/etc/resolv.conf"])
 print(f"DNS Resolution:\n{dns_output.decode()}")
 
-# Get resolved IP addresses
-def print_resolved_ips(hostname):
-    ip_addresses = socket.gethostbyname_ex(hostname)[-1]
-    print(f"Resolved IPs for {hostname}: {ip_addresses}")
-
-for pod_id, pod_ip in peer_ips.items():
-    print_resolved_ips(pod_id)
-
 
 # Get all pod's ip in namespace
 def get_pod_ip_addresses():
@@ -93,6 +85,14 @@ peer_ips = get_pod_ip_addresses()
 peer_port = 8000
 print("Peers IP addresses", peer_ips)
 
+# Get resolved IP addresses
+def print_resolved_ips(hostname):
+    ip_addresses = socket.gethostbyname_ex(hostname)[-1]
+    print(f"Resolved IPs for {hostname}: {ip_addresses}")
+
+for pod_id, pod_ip in peer_ips.items():
+    print_resolved_ips(pod_id)
+    
 # Initialize global model weights as the local model's weights
 global_model_weights = 10
 
