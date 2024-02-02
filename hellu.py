@@ -1,6 +1,7 @@
 from kubernetes import client, config
 import socket
 import time
+import subprocess
 
 def send_to_pod(pod_index, pod_ip, model_params):
     # Allow pods to send parameters to other pods in the same ns
@@ -19,12 +20,14 @@ def receive_from_pod(pod_index, pod_ip):
 
     return data
 
+
 def connect_with_retry(pod_ip):
     max_retries = 5
     retry_delay = 5
 
     for retry in range(max_retries):
         try:
+            print(f"Attempting connection to {pod_ip} (Retry {retry + 1}/{max_retries})")
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.connect((pod_ip, peer_port))
             return client_socket
@@ -33,6 +36,7 @@ def connect_with_retry(pod_ip):
             time.sleep(retry_delay)
 
     raise Exception("Unable to establish connection after multiple retries.")
+
 
 def is_pod_ready(pod_name):
     v1 = client.CoreV1Api()
@@ -52,6 +56,15 @@ def wait_for_pods_ready():
 
 # Wait for all pods ready before starting the communication
 wait_for_pods_ready()
+
+# Enable log to confirm context
+config.load_incluster_config()  # Load in-cluster Kubernetes configuration
+current_context = config.list_kube_config_contexts()[1]['context']['cluster']
+print(f"Current context: {current_context}")
+
+# Check DNS resolution within the pod
+dns_output = subprocess.check_output(["cat", "/etc/resolv.conf"])
+print(f"DNS Resolution:\n{dns_output.decode()}")
 
 
 # Get all pod's ip in namespace
