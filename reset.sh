@@ -31,7 +31,8 @@ kubectl apply -f pod_reader_binding.yaml
 
 # Deployment scripts to simplify the process
 kubectl apply -f service.yaml
-kubectl apply -f pods.yaml 
+#kubectl apply -f pods.yaml
+kubectl apply -f deployment.yaml 
 kubectl get pods -n fed-relax
 kubectl config set-context --current --namespace=fed-relax
 
@@ -39,4 +40,4 @@ kubectl config set-context --current --namespace=fed-relax
 # sudo docker build -t fed-relax .
 # docker tag fed-relax quynhhgoogoo/fed-relax:latest
 # docker push quynhhgoogoo/fed-relax:latest
-# kubectl apply -f pods.yaml
+# kubectl apply -f deployment.yaml

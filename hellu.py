@@ -92,7 +92,7 @@ def print_resolved_ips(hostname):
 
 for pod_id, pod_ip in peer_ips.items():
     print_resolved_ips(pod_id)
-    
+
 # Initialize global model weights as the local model's weights
 global_model_weights = 10
 
@@ -122,3 +122,6 @@ for iteration in range(num_iterations):
     # Update your local model with the global weights
     # local_model.coef_ = global_model_weights
     # local_model.fit(X1, y1)
+
+while True:
+    time.sleep(1)
