@@ -1,24 +1,31 @@
 from kubernetes import client, config
 import socket
+import json
 import time
 import subprocess
 
 def send_to_pod(pod_index, pod_ip, model_params):
     # Allow pods to send parameters to other pods in the same ns
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((pod_ip, peer_port))
-    client_socket.send(str(model_params).encode())
-    print(f"Send to pod {pod_index} received: {str(model_params).encode()}")
+    try:
+        with socket.create_connection((pod_ip, peer_port)) as client_socket:
+            serialized_params = json.dumps(model_params).encode()
+            client_socket.sendall(serialized_params)
+            print(f"Send to pod {pod_index} received: {serialized_params}")
+    except Exception as e:
+        print(f"Error sending data to pod {pod_index}: {e}")
 
 
 def receive_from_pod(pod_index, pod_ip):
     # Allow pods to receive parameters from other pods in same ns
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((pod_ip, peer_port))
-    data = client_socket.recv(1024)
-    print(f"Pod {pod_index} received: {data.decode()}")
-
-    return data
+    try:
+        with socket.create_connection((pod_ip, peer_port)) as client_socket:
+            data = client_socket.recv(1024)
+            received_params = json.loads(data.decode())
+            print(f"Pod {pod_index} received: {received_params}")
+            return received_params
+    except Exception as e:
+        print(f"Error receiving data from pod {pod_index}: {e}")
+        return None
 
 
 def connect_with_retry(pod_ip):
@@ -47,25 +54,12 @@ def wait_for_pods_ready():
     v1 = client.CoreV1Api()
     while True:
         ready_pods = [pod.metadata.name for pod in v1.list_namespaced_pod(namespace="fed-relax").items if is_pod_ready(pod.metadata.name)]
-        if len(ready_pods) == num_pods:
+        if len(ready_pods) == 2:
             print("All pods are ready.")
             break
         else:
             print(f"Waiting for pods to be ready. Ready pods: {ready_pods}")
             time.sleep(5)
-
-# Wait for all pods ready before starting the communication
-wait_for_pods_ready()
-
-# Enable log to confirm context
-config.load_incluster_config()  # Load in-cluster Kubernetes configuration
-current_context = config.list_kube_config_contexts()[1]['context']['cluster']
-print(f"Current context: {current_context}")
-
-# Check DNS resolution within the pod
-dns_output = subprocess.check_output(["cat", "/etc/resolv.conf"])
-print(f"DNS Resolution:\n{dns_output.decode()}")
-
 
 # Get all pod's ip in namespace
 def get_pod_ip_addresses():
@@ -81,17 +75,44 @@ def get_pod_ip_addresses():
 
     return pod_ip_addresses
 
-peer_ips = get_pod_ip_addresses() 
-peer_port = 8000
-print("Peers IP addresses", peer_ips)
-
 # Get resolved IP addresses
 def print_resolved_ips(hostname):
     ip_addresses = socket.gethostbyname_ex(hostname)[-1]
     print(f"Resolved IPs for {hostname}: {ip_addresses}")
 
-for pod_id, pod_ip in peer_ips.items():
-    print_resolved_ips(pod_id)
+
+print("Debugging: Getting Peer IP address")
+peer_ips = get_pod_ip_addresses() 
+peer_port = 8000
+print("Peers IP addresses", peer_ips)
+
+# Print the default kube-config file path
+print(config.KUBE_CONFIG_DEFAULT_LOCATION)
+
+# Try loading kube-config and print the configuration
+try:
+    config.load_kube_config()
+    print(config.list_kube_config_contexts())
+except Exception as e:
+    print(f"Error loading kube-config: {e}")
+
+
+# Wait for all pods ready before starting the communication
+print("Wait for pods to ready")
+wait_for_pods_ready()
+
+# Enable log to confirm context
+# config.load_incluster_config()  # Load in-cluster Kubernetes configuration
+# current_context = config.list_kube_config_contexts()[1]['context']['cluster']
+# print(f"Current context: {current_context}")
+
+# Check DNS resolution within the pod
+# dns_output = subprocess.check_output(["cat", "/etc/resolv.conf"])
+# print(f"DNS Resolution:\n{dns_output.decode()}")
+
+# for pod_id, pod_ip in peer_ips.items():
+#    print(pod_id)
+#    print_resolved_ips(pod_id)
 
 # Initialize global model weights as the local model's weights
 global_model_weights = 10
@@ -101,6 +122,8 @@ num_pods = 2
 
 # Number of iterations for FedRelax
 num_iterations = 10
+
+time.sleep(120)
 
 for iteration in range(num_iterations):
     # Share and receive global model weights from other pods
