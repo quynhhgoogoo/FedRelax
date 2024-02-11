@@ -26,8 +26,8 @@ docker run --rm -it quynhhgoogoo/fed-relax:latest ls /app
 #    --docker-email='luongdiemquynh1998@gmail.com'
 
 # Apply rbac with necessary permissions
-kubectl apply -f pod_reader_role.yaml
-kubectl apply -f pod_reader_binding.yaml
+kubectl apply -f role.yaml
+kubectl apply -f role_binding.yaml
 
 # Deployment scripts to simplify the process
 kubectl apply -f service.yaml

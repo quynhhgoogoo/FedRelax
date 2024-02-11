@@ -17,7 +17,9 @@ spec:
       containers:
       - name: fedrelax-container
         image: quynhhgoogoo/fed-relax:latest
-        command: ["python", "-u", "/app/hello.py"]
+        command: ["python", "-u", "/app/hellu.py"]
         imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
       imagePullSecrets:
       - name: regcred
