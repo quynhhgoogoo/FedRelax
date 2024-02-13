@@ -6,8 +6,10 @@ import subprocess
 
 def send_to_pod(pod_index, pod_ip, model_params):
     # Allow pods to send parameters to other pods in the same ns
+    pod_name, pod_ip = peer_ips
+    peer_port = int(pod_ip.split(':')[-1])
     try:
-        with socket.create_connection((pod_ip, peer_port)) as client_socket:
+        with socket.create_connection((pod_ip, peer_port), timeout=60) as client_socket:
             serialized_params = json.dumps(model_params).encode()
             client_socket.sendall(serialized_params)
             print(f"Send to pod {pod_index} received: {serialized_params}")
@@ -17,8 +19,10 @@ def send_to_pod(pod_index, pod_ip, model_params):
 
 def receive_from_pod(pod_index, pod_ip):
     # Allow pods to receive parameters from other pods in same ns
+    pod_name, pod_ip = peer_ips
+    peer_port = int(pod_ip.split(':')[-1])
     try:
-        with socket.create_connection((pod_ip, peer_port)) as client_socket:
+        with socket.create_connection((pod_ip, peer_port), timeout=60) as client_socket:
             data = client_socket.recv(1024)
             received_params = json.loads(data.decode())
             print(f"Pod {pod_index} received: {received_params}")
@@ -33,6 +37,8 @@ def connect_with_retry(pod_ip):
     retry_delay = 5
 
     for retry in range(max_retries):
+        pod_name, pod_ip = peer_ips
+        peer_port = int(pod_ip.split(':')[-1])
         try:
             print(f"Attempting connection to {pod_ip} (Retry {retry + 1}/{max_retries})")
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -83,7 +89,8 @@ def print_resolved_ips(hostname):
 
 print("Debugging: Getting Peer IP address")
 peer_ips = get_pod_ip_addresses() 
-peer_port = 8000
+peer_base_port = 3600
+peer_ips = {pod_name: f'{pod_ip}:{peer_base_port + i}' for i, (pod_name, pod_ip) in enumerate(peer_ips.items())}
 print("Peers IP addresses", peer_ips)
 
 # Print the default kube-config file path
