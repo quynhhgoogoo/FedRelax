@@ -13,8 +13,10 @@ def check_health_condition():
 
     # Check the exit code
     if process.returncode == 0:
+        print("Health check OK")
         return True  
     else:
+        print("Health check Not OK")
         return False  
 
 app = Flask(__name__)
@@ -50,7 +52,7 @@ if __name__ == '__main__':
         # Your existing logic for communication with other pods
 
         # Example health check condition, modify as needed
-        if check_health_condition:
+        if check_health_condition():
             healthy = True
         else:
             healthy = False

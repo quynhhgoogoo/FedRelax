@@ -20,6 +20,6 @@ spec:
         command: ["python", "-u", "/app/hellu.py"]
         imagePullPolicy: Always
         ports:
-        - containerPort: 8000
+        - containerPort: 3000
       imagePullSecrets:
       - name: regcred
