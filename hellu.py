@@ -2,6 +2,7 @@ from kubernetes import client, config
 import socket
 import json
 import time
+import threading
 
 def send_to_pod(pod_index, pod_ip, model_params):
     try:
@@ -37,18 +38,29 @@ def get_pod_info(namespace):
 
 def run_bidirectional_communication(pod_index, peer_pods):
     while True:
+        threads = []
+
         # Simulate sending and receiving data between pods
         for peer_pod_index, peer_pod_ip in peer_pods.items():
             if peer_pod_index != pod_index:
-                # Send data to the peer pod
-                send_to_pod(pod_index, peer_pod_ip, {"message": f"Hello from Pod {pod_index}"})
+                # Create threads for simultaneous communication
+                send_thread = threading.Thread(target=send_to_pod, args=(peer_pod_ip, peer_port, f"Hello from Pod {pod_index}"))
+                receive_thread = threading.Thread(target=receive_from_pod, args=(peer_pod_ip, peer_port))
+
+                threads.extend([send_thread, receive_thread])
+
+                # Start the threads
+                send_thread.start()
+                receive_thread.start()
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
                 
-                # Receive data from the peer pod
-                received_data = receive_from_pod(pod_index, peer_pod_ip)
-                
-                # Process the received data (you can customize this part)
-                if received_data:
-                    print(f"Pod {pod_index} received: {received_data}")
+        # Process the received data (you can customize this part)
+        received_data = receive_from_pod(pod_index, peer_port)
+        if received_data:
+            print(f"Pod {pod_index} received: {received_data}")
 
         # Add a delay to simulate a continuous communication loop
         time.sleep(5)
