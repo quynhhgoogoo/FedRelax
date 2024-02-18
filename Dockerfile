@@ -9,6 +9,7 @@ COPY . /app
 RUN pip install Flask numpy scikit-learn matplotlib kubernetes
 RUN apt-get update && apt-get install -y iputils-ping
 RUN apt-get update && apt-get install -y net-tools
+RUN apt-get update && apt-get install -y dnsutils && rm -rf /var/lib/apt/lists/*
 
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
