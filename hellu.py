@@ -106,7 +106,7 @@ if __name__ == "__main__":
     namespace = 'fed-relax'
     peer_port = 3000
     
-    #wait_for_pods_ready()
+    # wait_for_pods_ready()
 
     pod_info = get_pod_info(namespace)
     print(pod_info)

@@ -41,3 +41,16 @@ kubectl config set-context --current --namespace=fed-relax
 # docker tag fed-relax quynhhgoogoo/fed-relax:latest
 # docker push quynhhgoogoo/fed-relax:latest
 # kubectl apply -f deployment.yaml
+
+# Troubleshoot CoreDNS logs
+# kubectl get pods -n kube-system -l k8s-app=kube-dns
+# kubectl logs -n kube-system -l k8s-app=kube-dns
+
+# Exec to DNS pod
+# kubectl config set-context --current --namespace=kube-system
+# kubectl debug -it coredns-5d78c9869d-b75zr --image=busybox:1.28 --target=coredns
+
+# kubectl exec -it -n kube-system <COREDNS_POD_NAME> -- /bin/sh
+# nslookup fedrelax-deployment-ccc754d4f-vmmqh.fed-relax.svc.cluster.local
+
+

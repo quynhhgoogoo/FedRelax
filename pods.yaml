@@ -5,13 +5,13 @@ metadata:
   name: pod1
   namespace: fed-relax
   labels:
-    app: fedrelax
+    app: send
 spec:
   restartPolicy: Always
   containers:
-  - name: fedrelax-container
-    image: quynhhgoogoo/fed-relax:latest
-    command: ["python", "-u", "/app/hellu.py"]
+  - name: send-container
+    image: quynhhgoogoo/send:latest
+    command: ["python", "-u", "/app/send.py"]
     imagePullPolicy: Always
 
 ---
@@ -23,13 +23,13 @@ metadata:
   name: pod2
   namespace: fed-relax
   labels:
-    app: fedrelax
+    app: receive
 spec:
   restartPolicy: Always
   containers:
-  - name: fedrelax-container
-    image: quynhhgoogoo/fed-relax:latest
-    command: ["python", "-u", "/app/hellu.py"]
+  - name: receive-container
+    image: quynhhgoogoo/receive:latest
+    command: ["python", "-u", "/app/receive.py"]
     imagePullPolicy: Always
   imagePullSecrets:
   - name: regcred 
