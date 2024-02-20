@@ -1,11 +1,40 @@
 import socket
+import os
+import sys
+import time
 
-HOST = "0.0.0.0"
-PORT = 3000 
+counter = 0
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(b"Hello, world")
-    data = s.recv(1024)
+SRV = "server_ip"
+PORT = 3000
 
-print(f"Received {data!r}")
+while 1:
+    if counter != 0:
+        time.sleep(5)
+
+    counter += 1
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_address = (SRV, PORT)
+    print("Connection #{}".format(counter))
+    print('Connecting to {} port {}'.format(*server_address))
+    try:
+        sock.connect(server_address)
+    except Exception as e:
+        print("Cannot connect to the server,", e)
+        continue
+
+    try:
+        message = b'This is the message. It will be repeated.'
+        print('Sending:  {!r}'.format(message))
+        sock.sendall(message)
+
+        amount_received = 0
+        amount_expected = len(message)
+
+        while amount_received < amount_expected:
+            data = sock.recv(64)
+            amount_received += len(data)
+            print('Received: {!r}'.format(data))
+    finally:
+        print('Closing socket\n')
+        sock.close()

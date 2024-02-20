@@ -1,20 +1,28 @@
-import json
 import socket
-import time
+import sys
+import os
 
-import socket
+PORT = 3000
 
-HOST = "127.0.0.1" 
-PORT = 3000  
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_address = ('receiver_ip', PORT)
+print('Starting up on {} port {}'.format(*server_address))
+sock.bind(server_address)
+sock.listen()
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((HOST, PORT))
-    s.listen()
-    conn, addr = s.accept()
-    with conn:
-        print(f"Connected by {addr}")
+while True:
+    print('\nWaiting for a connection')
+    connection, client_address = sock.accept()
+    try:
+        print('Connection from', client_address)
         while True:
-            data = conn.recv(1024)
-            if not data:
+            data = connection.recv(64)
+            print('Received {!r}'.format(data))
+            if data:
+                print('Sending data back to the client')
+                connection.sendall(data)
+            else:
+                print('No data from', client_address)
                 break
-            conn.sendall(data)
+    finally:
+        connection.close()

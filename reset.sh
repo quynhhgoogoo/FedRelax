@@ -53,4 +53,4 @@ kubectl config set-context --current --namespace=fed-relax
 # kubectl exec -it -n kube-system <COREDNS_POD_NAME> -- /bin/sh
 # nslookup fedrelax-deployment-ccc754d4f-vmmqh.fed-relax.svc.cluster.local
 
-
+# sudo iptables -A INPUT -p tcp --dport <port_number> -j ACCEPT
