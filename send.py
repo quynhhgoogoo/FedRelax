@@ -21,18 +21,10 @@ def get_pod_info(namespace):
         pod_info[pod.metadata.name] = pod.status.pod_ip
     return pod_info
 
-pod_index = get_pod_ip()
-peer_pods = get_pod_info("fed-relax")
-
-for peer_pod_index, peer_pod_ip in peer_pods.items():
-    if peer_pod_ip != pod_index:
-        print(peer_pod_ip, pod_index)
-        # Need to rewrite this. Will be different case if the number of pods are > 2
-        SRV = peer_pod_ip
-
+SRV = get_pod_ip()
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = (SRV, PORT)
+server_address = (str(SRV), PORT)
 print('Starting up on {} port {}'.format(*server_address))
 sock.bind(server_address)
 sock.listen()

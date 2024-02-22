@@ -49,10 +49,8 @@ while 1:
         message = b'This is the message. It will be repeated.'
         print('Sending:  {!r}'.format(message))
         sock.sendall(message)
-
         amount_received = 0
         amount_expected = len(message)
-
         while amount_received < amount_expected:
             data = sock.recv(64)
             amount_received += len(data)
