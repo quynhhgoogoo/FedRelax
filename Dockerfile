@@ -10,6 +10,7 @@ RUN pip install Flask numpy scikit-learn matplotlib kubernetes
 RUN apt-get update && apt-get install -y iputils-ping \ 
     && apt-get install -y net-tools \
     && apt-get install -y dnsutils  \
+    && apt-get install -y vim \
     && apt-get install -y iptables && rm -rf /var/lib/apt/lists/*
 
 # Make port 8000 available to the world outside this container

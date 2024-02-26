@@ -2,6 +2,8 @@ import socket
 import os
 import sys
 import time
+import select
+import errno
 from kubernetes import client, config
 
 counter = 0
@@ -25,36 +27,25 @@ def get_pod_info(namespace):
 pod_index = get_pod_ip()
 peer_pods = get_pod_info("fed-relax")
 
-for peer_pod_index, peer_pod_ip in peer_pods.items():
-    if peer_pod_ip != pod_index:
-        # Need to rewrite this. Will be different case if the number of pods are > 2
-        SRV = peer_pod_ip
-
+SRV = list(peer_pods.values())[0]
 PORT = 3000
 
-while 1:
-    if counter != 0:
-        time.sleep(5)
-    counter += 1
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_address = (SRV, PORT)
-    print("Connection #{}".format(counter))
-    print('Connecting to {} port {}'.format(*server_address))
+client_socket = socket.socket()
+client_socket.connect((SRV, PORT))
+client_socket.setblocking(False)
+
+while True:
+    message = message.encode('utf-8')
+    client_socket.send(message)
     try:
-        sock.connect(server_address)
-    except Exception as e:
-        print("Cannot connect to the server,", e)
+        while True:
+            message = client_socket.recv(1024).decode('utf-8')
+            print(f'{pod_index} > {message}')
+    except IOError as e:
+        if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+            print('Reading error: {}'.format(str(e)))
+            sys.exit()
         continue
-    try:
-        message = b'This is the message. It will be repeated.'
-        print('Sending:  {!r}'.format(message))
-        sock.sendall(message)
-        amount_received = 0
-        amount_expected = len(message)
-        while amount_received < amount_expected:
-            data = sock.recv(64)
-            amount_received += len(data)
-            print('Received: {!r}'.format(data))
-    finally:
-        print('Closing socket\n')
-        sock.close()
+    except Exception as e:
+        print('Reading error: '.format(str(e)))
+        sys.exit()

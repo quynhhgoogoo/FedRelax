@@ -1,9 +1,12 @@
 import socket
-import sys
 import os
+import sys
+import time
+import select
+import errno
 from kubernetes import client, config
 
-PORT = 3000
+counter = 0
 
 def get_pod_ip():
     # Get the hostname of the pod
@@ -21,27 +24,29 @@ def get_pod_info(namespace):
         pod_info[pod.metadata.name] = pod.status.pod_ip
     return pod_info
 
-SRV = get_pod_ip()
+pod_index = get_pod_ip()
+peer_pods = get_pod_info("fed-relax")
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = (str(SRV), PORT)
-print('Starting up on {} port {}'.format(*server_address))
-sock.bind(server_address)
-sock.listen()
+SRV = list(peer_pods.values())[0]
+PORT = 3000
+
+client_socket = socket.socket()
+client_socket.connect((SRV, PORT))
+client_socket.setblocking(False)
 
 while True:
-    print('\nWaiting for a connection')
-    connection, client_address = sock.accept()
+    message = message.encode('utf-8')
+    client_socket.send( message)
     try:
-        print('Connection from', client_address)
         while True:
-            data = connection.recv(64)
-            print('Received {!r}'.format(data))
-            if data:
-                print('Sending data back to the client')
-                connection.sendall(data)
-            else:
-                print('No data from', client_address)
-                break
-    finally:
-        connection.close()
+            message = client_socket.recv(1024).decode('utf-8')
+            print(f'{pod_index} > {message}')
+    except IOError as e:
+        if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+            print('Reading error: {}'.format(str(e)))
+            sys.exit()
+        continue
+    except Exception as e:
+        print('Reading error: '.format(str(e)))
+        sys.exit()
+   
