@@ -30,7 +30,7 @@ kubectl apply -f role.yaml
 kubectl apply -f role_binding.yaml
 
 # Deployment scripts to simplify the process
-kubectl apply -f service.yaml
+# skubectl apply -f service.yaml
 #kubectl apply -f pods.yaml
 kubectl apply -f deployment.yaml 
 kubectl get pods -n fed-relax

@@ -6,12 +6,8 @@ import select
 import errno
 from kubernetes import client, config
 
-counter = 0
-
 def get_pod_ip():
-    # Get the hostname of the pod
     hostname = socket.gethostname()
-    # Get the IP address corresponding to the hostname
     ip_address = socket.gethostbyname(hostname)
     return ip_address
 
@@ -35,17 +31,31 @@ client_socket.connect((SRV, PORT))
 client_socket.setblocking(False)
 
 while True:
+    message = "10"
     message = message.encode('utf-8')
-    client_socket.send(message)
+
+    while True:
+        try:
+            client_socket.send(message)
+            break
+        except IOError as e:
+            if e.errno == errno.EAGAIN or e.errno == errno.EWOULDBLOCK:
+                # If the operation would block, wait and try again
+                time.sleep(0.1)
+            else:
+                print('Sending error: {}'.format(str(e)))
+                sys.exit()
+
     try:
-        while True:
-            message = client_socket.recv(1024).decode('utf-8')
-            print(f'{pod_index} > {message}')
+        # Wait for the socket to become readable
+        ready_to_read, _, _ = select.select([client_socket], [], [], 1)
+        if ready_to_read:
+            data = client_socket.recv(1024).decode('utf-8')
+            print(f'{pod_index} > {data}')
     except IOError as e:
         if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
             print('Reading error: {}'.format(str(e)))
             sys.exit()
-        continue
     except Exception as e:
-        print('Reading error: '.format(str(e)))
+        print('Reading error: {}'.format(str(e)))
         sys.exit()
