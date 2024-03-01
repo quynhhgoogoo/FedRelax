@@ -17,10 +17,4 @@ RUN apt-get update && apt-get install -y iputils-ping \
 EXPOSE 8000
 
 
-CMD ["python", "hellu.py"]
-#ENTRYPOINT ["python", "-u", "/app/hello.py"]
-
-# Health check
-# HEALTHCHECK --interval=5s \
-#            --timeout=3s \
-#            CMD ["python", "healthcheck.py"]
+CMD ["python", "/server/send.py"]

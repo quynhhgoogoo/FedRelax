@@ -37,10 +37,15 @@ kubectl get pods -n fed-relax
 kubectl config set-context --current --namespace=fed-relax
 
 # kubectl get pod pod1 -n fed-relax -o=jsonpath='{.status.containerStatuses[*].state.terminated.exitCode}'
-# sudo docker build -t fed-relax .
-# docker tag fed-relax quynhhgoogoo/fed-relax:latest
-# docker push quynhhgoogoo/fed-relax:latest
-# kubectl apply -f deployment.yaml
+
+# Seperated containers
+# sudo docker build -t fed-relax-server -f server/Dockerfile .
+# docker tag fed-relax-server quynhhgoogoo/fed-relax-server:latest
+# docker push quynhhgoogoo/fed-relax-server:latest
+
+# sudo docker build -t fed-relax-client -f client/Dockerfile .
+# docker tag fed-relax-client quynhhgoogoo/fed-relax-client:latest
+# docker push quynhhgoogoo/fed-relax-client:latest
 
 # Troubleshoot CoreDNS logs
 # kubectl get pods -n kube-system -l k8s-app=kube-dns

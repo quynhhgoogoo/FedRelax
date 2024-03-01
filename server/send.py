@@ -29,6 +29,7 @@ peer_pods = get_pod_info("fed-relax")
 
 SRV = list(peer_pods.values())[0]
 PORT = 3000
+print(SRV, PORT)
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

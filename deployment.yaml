@@ -1,7 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: fedrelax-deployment
+  name: fedrelax-deployment-server
+  namespace: fed-relax
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fedrelax
+  template:
+    metadata:
+      labels:
+        app: fedrelax
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: fedrelax-container-server
+        image: quynhhgoogoo/fed-relax-server:latest
+        command: ["python3", "-u", "/app/server/send.py"]
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+      - name: regcred
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fedrelax-deployment-client
   namespace: fed-relax
 spec:
   replicas: 3
@@ -15,9 +43,9 @@ spec:
     spec:
       restartPolicy: Always
       containers:
-      - name: fedrelax-container
-        image: quynhhgoogoo/fed-relax:latest
-        command: ["python", "-u", "/app/hellu.py"]
+      - name: fedrelax-container-client
+        image: quynhhgoogoo/fed-relax-client:latest
+        command: ["python3", "-u", "/app/client/receive.py"]
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
