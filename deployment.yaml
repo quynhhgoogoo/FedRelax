@@ -7,11 +7,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: fedrelax
+      app: fedrelax-server
   template:
     metadata:
       labels:
-        app: fedrelax
+        app: fedrelax-server
     spec:
       restartPolicy: Always
       containers:
@@ -35,11 +35,11 @@ spec:
   replicas: 3
   selector:
     matchLabels:
-      app: fedrelax
+      app: fedrelax-client
   template:
     metadata:
       labels:
-        app: fedrelax
+        app: fedrelax-client
     spec:
       restartPolicy: Always
       containers:

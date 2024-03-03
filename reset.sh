@@ -11,10 +11,14 @@ docker images
 docker rmi quynhhgoogoo/fed-relax
 
 # Build the images
-sudo docker build -t fed-relax .
-docker tag fed-relax quynhhgoogoo/fed-relax:latest
-docker push quynhhgoogoo/fed-relax:latest
-docker run --rm -it quynhhgoogoo/fed-relax:latest ls /app
+# Seperated containers
+sudo docker build -t fed-relax-server -f server/Dockerfile .
+docker tag fed-relax-server quynhhgoogoo/fed-relax-server:latest
+docker push quynhhgoogoo/fed-relax-server:latest
+
+sudo docker build -t fed-relax-client -f client/Dockerfile .
+docker tag fed-relax-client quynhhgoogoo/fed-relax-client:latest
+docker push quynhhgoogoo/fed-relax-client:latest
 
 # Provide credentials
 #read -p 'Username: ' uservar
@@ -30,22 +34,13 @@ kubectl apply -f role.yaml
 kubectl apply -f role_binding.yaml
 
 # Deployment scripts to simplify the process
-# skubectl apply -f service.yaml
+kubectl apply -f service.yaml
 #kubectl apply -f pods.yaml
 kubectl apply -f deployment.yaml 
 kubectl get pods -n fed-relax
 kubectl config set-context --current --namespace=fed-relax
 
 # kubectl get pod pod1 -n fed-relax -o=jsonpath='{.status.containerStatuses[*].state.terminated.exitCode}'
-
-# Seperated containers
-# sudo docker build -t fed-relax-server -f server/Dockerfile .
-# docker tag fed-relax-server quynhhgoogoo/fed-relax-server:latest
-# docker push quynhhgoogoo/fed-relax-server:latest
-
-# sudo docker build -t fed-relax-client -f client/Dockerfile .
-# docker tag fed-relax-client quynhhgoogoo/fed-relax-client:latest
-# docker push quynhhgoogoo/fed-relax-client:latest
 
 # Troubleshoot CoreDNS logs
 # kubectl get pods -n kube-system -l k8s-app=kube-dns

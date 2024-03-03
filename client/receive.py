@@ -23,7 +23,8 @@ def get_pod_info(namespace):
 pod_index = get_pod_ip()
 peer_pods = get_pod_info("fed-relax")
 
-SRV = list(peer_pods.values())[0]
+SRV = list(peer_pods.values())[-1]
+#SRV = "service1"
 PORT = 3000
 print(SRV, PORT)
 
