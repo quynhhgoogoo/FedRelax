@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . /app
 
 # RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install Flask numpy scikit-learn matplotlib kubernetes
+RUN pip install Flask numpy scikit-learn matplotlib kubernetes networkx
 RUN apt-get update && apt-get install -y iputils-ping \ 
     && apt-get install -y net-tools \
     && apt-get install -y dnsutils  \

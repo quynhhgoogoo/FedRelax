@@ -1,12 +1,13 @@
 from kubernetes import client, config
 import pickle
+import networkx as nx
 import numpy as np
 
 # Load the graph object from the pickle file
-G = pickle.load(open('/algorithm/QuizGraphLearning.pickle', 'rb'))
+G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
 
 # Load Kubernetes configuration
-config.load_kube_config()
+config.load_incluster_config()
 
 # Get pod's name and IP addresses {pod_name:IP}
 def get_pod_info(namespace="fed-relax"):
@@ -26,7 +27,9 @@ def update_pod_attributes(pod_name, new_attributes):
     v1 = client.CoreV1Api()
     pod = v1.read_namespaced_pod(name=pod_name, namespace="fed-relax")
     # Update pod attributes
-    pod.metadata.labels.update(new_attributes)
+    new_labels = {k: str(v) for k, v in new_pod_attributes.items()}
+    print(new_labels)
+    pod.metadata.labels.update(new_labels)
     # Apply the changes
     v1.replace_namespaced_pod(name=pod_name, namespace="fed-relax", body=pod)
 
@@ -35,8 +38,8 @@ def update_pod_attributes(pod_name, new_attributes):
 for i, iter_node in enumerate(G.nodes()):
     node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
     
-    pod_name = list(get_pod_info)[i]
-    pod_ip = list(get_pod_info.values())[i]
+    pod_name = list(get_pod_info())[i]
+    pod_ip = list(get_pod_info().values())[i]
 
     # Construct the new attributes based on 'node_features'
     new_pod_attributes = {
