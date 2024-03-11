@@ -8,7 +8,8 @@ kubectl create ns fed-relax
 docker images
 
 # Clean latest image
-docker rmi quynhhgoogoo/fed-relax
+docker rmi quynhhgoogoo/fed-relax-client
+docker rmi quynhhgoogoo/fed-relax-server
 
 # Build the images
 # Seperated containers

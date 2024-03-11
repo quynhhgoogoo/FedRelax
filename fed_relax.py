@@ -23,18 +23,35 @@ def get_pod_info(namespace="fed-relax"):
     return pod_info
 
 
-def update_pod_attributes(pod_name, new_attributes):
+def create_or_update_configmap(configmap_name, configmap_data, namespace="fed-relax"):
     v1 = client.CoreV1Api()
-    pod = v1.read_namespaced_pod(name=pod_name, namespace="fed-relax")
-    # Update pod attributes
-    new_labels = {k: str(v) for k, v in new_pod_attributes.items()}
-    print(new_labels)
+    
+    # Check if the ConfigMap already exists
+    try:
+        existing_configmap = v1.read_namespaced_config_map(name=configmap_name, namespace=namespace)
+        existing_configmap.data = {key: str(value) for key, value in configmap_data.items()}
+        v1.replace_namespaced_config_map(name=configmap_name, namespace=namespace, body=existing_configmap)
+    except client.rest.ApiException as e:
+        if e.status == 404:
+            # ConfigMap doesn't exist, create a new one
+            configmap_body = {"data": {key: str(value) for key, value in configmap_data.items()}}
+            v1.create_namespaced_config_map(namespace=namespace, body=configmap_body, name=configmap_name)
+
+
+def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
+    v1 = client.CoreV1Api()
+    pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
+
+    # Update pod attributes to reference the ConfigMap
+    new_labels = {"configmap-name": configmap_name}
     pod.metadata.labels.update(new_labels)
+
     # Apply the changes
-    v1.replace_namespaced_pod(name=pod_name, namespace="fed-relax", body=pod)
+    v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
 
 
 # Iterate through the nodes and update Kubernetes pods
+nodes = list(G.nodes())[3:]     # Should be scaled up later
 for i, iter_node in enumerate(G.nodes()):
     node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
     
@@ -42,12 +59,16 @@ for i, iter_node in enumerate(G.nodes()):
     pod_ip = list(get_pod_info().values())[i]
 
     # Construct the new attributes based on 'node_features'
-    new_pod_attributes = {
+    configmap_data = {
         "coords": node_features.tolist(),
-        "name": pod_ip,
         "Xtrain": G.nodes[iter_node]["Xtrain"].tolist(),
         "ytrain": G.nodes[iter_node]["ytrain"].tolist(),
     }
 
+    configmap_name = f"node-configmap-{iter_node}"
+
+    # Create or update ConfigMap
+    create_or_update_configmap(configmap_name, configmap_data)
+
     # Update the Kubernetes pod with the new attributes
-    update_pod_attributes(pod_name, new_pod_attributes)
+    update_pod_attributes(pod_name, configmap_name)
