@@ -15,7 +15,7 @@ def get_pod_info(namespace="fed-relax"):
     v1 = client.CoreV1Api()
 
     pod_info = {}
-    pods = v1.list_namespaced_pod(namespace=namespace)
+    pods = v1.list_namespaced_pod(namespace=namespace, label_selector="app=fedrelax-client")
 
     for pod in pods.items:
         pod_info[pod.metadata.name] = pod.status.pod_ip
@@ -32,6 +32,7 @@ def create_or_update_configmap(configmap_name, configmap_data, namespace="fed-re
         existing_configmap.data = {key: str(value) for key, value in configmap_data.items()}
         v1.replace_namespaced_config_map(name=configmap_name, namespace=namespace, body=existing_configmap)
     except client.rest.ApiException as e:
+        print(f"Error during ConfigMap operation: {e}")
         if e.status == 404:
             # ConfigMap doesn't exist, create a new one
             configmap_body = {"data": {key: str(value) for key, value in configmap_data.items()}}
@@ -69,6 +70,9 @@ for i, iter_node in enumerate(G.nodes()):
 
     # Create or update ConfigMap
     create_or_update_configmap(configmap_name, configmap_data)
+    print(f"ConfigMap Data for {configmap_name}: {configmap_data}")
 
     # Update the Kubernetes pod with the new attributes
     update_pod_attributes(pod_name, configmap_name)
+    print(f"ConfigMap {configmap_name} created/updated successfully.")
+

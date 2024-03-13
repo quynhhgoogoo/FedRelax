@@ -13,6 +13,7 @@ spec:
       labels:
         app: fedrelax-server
     spec:
+      serviceAccountName: my-service-account
       restartPolicy: Always
       containers:
       - name: fedrelax-container-server
@@ -42,6 +43,7 @@ spec:
         app: fedrelax-client
     spec:
       restartPolicy: Always
+      serviceAccountName: my-service-account
       containers:
       - name: fedrelax-container-client
         image: quynhhgoogoo/fed-relax-client:latest

@@ -55,3 +55,6 @@ kubectl config set-context --current --namespace=fed-relax
 # nslookup fedrelax-deployment-ccc754d4f-vmmqh.fed-relax.svc.cluster.local
 
 # sudo iptables -A INPUT -p tcp --dport <port_number> -j ACCEPT
+
+# Check list of k8s rules
+# kubectl api-resources --sort-by name -o wide

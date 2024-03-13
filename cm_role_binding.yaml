@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: pod-reader-binding
+  name: configmap-manager-binding
 subjects:
 - kind: ServiceAccount
   name: my-service-account
   namespace: fed-relax
 roleRef:
   kind: ClusterRole
-  name: pod-reader
+  name: configmap-manager
   apiGroup: rbac.authorization.k8s.io
