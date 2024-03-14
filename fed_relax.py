@@ -32,11 +32,17 @@ def create_or_update_configmap(configmap_name, configmap_data, namespace="fed-re
         existing_configmap.data = {key: str(value) for key, value in configmap_data.items()}
         v1.replace_namespaced_config_map(name=configmap_name, namespace=namespace, body=existing_configmap)
     except client.rest.ApiException as e:
-        print(f"Error during ConfigMap operation: {e}")
         if e.status == 404:
             # ConfigMap doesn't exist, create a new one
-            configmap_body = {"data": {key: str(value) for key, value in configmap_data.items()}}
-            v1.create_namespaced_config_map(namespace=namespace, body=configmap_body, name=configmap_name)
+            if not configmap_name:
+                print("Error: ConfigMap name is empty")
+                return
+            configmap_body = client.V1ConfigMap(metadata=client.V1ObjectMeta(name=configmap_name), 
+                                                data={key: str(value) for key, value in configmap_data.items()})
+            v1.create_namespaced_config_map(namespace=namespace, body=configmap_body)
+        else:
+            print(f"Error during ConfigMap operation: {e}")
+
 
 
 def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
@@ -51,9 +57,12 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
     v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
 
 
+# Should modify and scale later
+num_pods = min(len(list(get_pod_info())), len(G.nodes()))
+
 # Iterate through the nodes and update Kubernetes pods
-nodes = list(G.nodes())[3:]     # Should be scaled up later
-for i, iter_node in enumerate(G.nodes()):
+for iter_node in range(num_pods):
+    i = iter_node
     node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
     
     pod_name = list(get_pod_info())[i]
