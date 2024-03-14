@@ -57,31 +57,33 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
     v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
 
 
+def load_attributes():
 # Should modify and scale later
-num_pods = min(len(list(get_pod_info())), len(G.nodes()))
+    num_pods = min(len(list(get_pod_info())), len(G.nodes()))
 
-# Iterate through the nodes and update Kubernetes pods
-for iter_node in range(num_pods):
-    i = iter_node
-    node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
-    
-    pod_name = list(get_pod_info())[i]
-    pod_ip = list(get_pod_info().values())[i]
+    # Iterate through the nodes and update Kubernetes pods
+    for iter_node in range(num_pods):
+        i = iter_node
+        node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
+        
+        pod_name = list(get_pod_info())[i]
+        pod_ip = list(get_pod_info().values())[i]
 
-    # Construct the new attributes based on 'node_features'
-    configmap_data = {
-        "coords": node_features.tolist(),
-        "Xtrain": G.nodes[iter_node]["Xtrain"].tolist(),
-        "ytrain": G.nodes[iter_node]["ytrain"].tolist(),
-    }
+        # Construct the new attributes based on 'node_features'
+        configmap_data = {
+            "coords": node_features.tolist(),
+            "Xtrain": G.nodes[iter_node]["Xtrain"].tolist(),
+            "ytrain": G.nodes[iter_node]["ytrain"].tolist(),
+        }
 
-    configmap_name = f"node-configmap-{iter_node}"
+        configmap_name = f"node-configmap-{iter_node}"
 
-    # Create or update ConfigMap
-    create_or_update_configmap(configmap_name, configmap_data)
-    print(f"ConfigMap Data for {configmap_name}: {configmap_data}")
+        # Create or update ConfigMap
+        create_or_update_configmap(configmap_name, configmap_data)
+        print(f"ConfigMap Data for {configmap_name}: {configmap_data}")
 
-    # Update the Kubernetes pod with the new attributes
-    update_pod_attributes(pod_name, configmap_name)
-    print(f"ConfigMap {configmap_name} created/updated successfully.")
+        # Update the Kubernetes pod with the new attributes
+        update_pod_attributes(pod_name, configmap_name)
+        print(f"ConfigMap {configmap_name} created/updated successfully.")
 
+load_attributes()

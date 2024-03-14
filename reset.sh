@@ -58,3 +58,10 @@ kubectl config set-context --current --namespace=fed-relax
 
 # Check list of k8s rules
 # kubectl api-resources --sort-by name -o wide
+
+# Check configmaps
+# kubectl get configmaps node-configmap-0 -o yaml
+# Get pods's annotation
+# Check if pod is binding to configmap
+# kubectl get pod <pod_name> -o yaml | grep configmap
+# kubectl get pods -o=jsonpath='{range .items[*]}Pod: {.metadata.name}{"\nAnnotations:\n"}{range .metadata.annotations}{.key}: {.value}{"\n"}{end}{"\n\n"}{end}'
