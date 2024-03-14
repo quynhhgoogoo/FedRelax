@@ -11,6 +11,11 @@ from sklearn.metrics import mean_squared_error
 # Load the graph object from the pickle file
 G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
 
+for iter_node in G.nodes(): 
+    nodefeatures = np.array([np.mean(G.nodes[iter_node]["Xtrain"]),np.mean(G.nodes[iter_node]["ytrain"])])
+    G.nodes[iter_node]['coords'] = nodefeatures 
+    G.nodes[iter_node]["name"] = str(iter_node)
+
 # Load Kubernetes configuration
 config.load_incluster_config()
 
@@ -92,7 +97,7 @@ def init_attributes():
         print(f"ConfigMap {configmap_name} created/updated successfully.")
 
 
-def add_edges_k8s(graphin, nrneighbors=3, pos='coord', refdistance=1, namespace="fed-relax"):
+def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace="fed-relax"):
     edges = graphin.edges()
     graphin.remove_edges_from(edges)
 
@@ -100,17 +105,25 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coord', refdistance=1, namespace=
     pod_info = get_pod_info(namespace)
 
     # Build up a numpy array tmp_data which has one row for each pod in graphinloa
-    tmp_data = np.zeros((len(graphin.nodes()), len(graphin.nodes[0][pos])))
-    for iter_node in graphin.nodes():
-        # Each row of tmp_data holds the numpy array stored in the node attribute selected by parameter "pos"
-        tmp_data[iter_node, :] = graphin.nodes[iter_node][pos]
+    tmp_data = np.zeros((len(graphin.nodes()), len(next(iter(graphin.nodes().values())))))
+    
+    # Iterate over the nodes and their attributes
+    for iter_node in graphin.nodes(data=True):
+        node_index, node_attr = iter_node
+        # Check if the 'coords' attribute exists for the node
+        if pos in node_attr:
+            # Each row of tmp_data holds the numpy array stored in the node attribute selected by parameter "pos"
+            tmp_data[node_index, :] = node_attr[pos]
+        else:
+            # Handle the case where the attribute is missing for a node
+            print(f"Attribute '{pos}' not found for node {node_index}")
 
     # Create a connectivity matrix using k-neighbors
     A = kneighbors_graph(tmp_data, nrneighbors, mode='connectivity', include_self=False)
     A = A.toarray()
 
-    for iter_i in range(len(graphin.nodes)):
-        for iter_j in range(len(graphin.nodes)):
+    for iter_i in range(len(graphin.nodes())):
+        for iter_j in range(len(graphin.nodes())):
             # Add an edge between nodes i,j if entry A_i,j is non-zero
             if A[iter_i, iter_j] > 0:
                 graphin.add_edge(iter_i, iter_j)
@@ -124,4 +137,4 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coord', refdistance=1, namespace=
 init_attributes()
 
 # Add edges based on the pod coordinates
-add_edges_k8s(G, nrneighbors=3, pos='coords', refdistance=100)
+add_edges_k8s(G, nrneighbors=2, pos='coords', refdistance=100)
