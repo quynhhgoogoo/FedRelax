@@ -1,7 +1,12 @@
 from kubernetes import client, config
 import pickle
-import networkx as nx
 import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+import networkx as nx
+from sklearn.neighbors import kneighbors_graph
+from numpy import linalg as LA
+import time
+from sklearn.metrics import mean_squared_error
 
 # Load the graph object from the pickle file
 G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
@@ -57,7 +62,7 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
     v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
 
 
-def load_attributes():
+def init_attributes():
 # Should modify and scale later
     num_pods = min(len(list(get_pod_info())), len(G.nodes()))
 
@@ -86,4 +91,37 @@ def load_attributes():
         update_pod_attributes(pod_name, configmap_name)
         print(f"ConfigMap {configmap_name} created/updated successfully.")
 
-load_attributes()
+
+def add_edges_k8s(graphin, nrneighbors=3, pos='coord', refdistance=1, namespace="fed-relax"):
+    edges = graphin.edges()
+    graphin.remove_edges_from(edges)
+
+    # Get pod information from the Kubernetes cluster
+    pod_info = get_pod_info(namespace)
+
+    # Build up a numpy array tmp_data which has one row for each pod in graphinloa
+    tmp_data = np.zeros((len(graphin.nodes()), len(graphin.nodes[0][pos])))
+    for iter_node in graphin.nodes():
+        # Each row of tmp_data holds the numpy array stored in the node attribute selected by parameter "pos"
+        tmp_data[iter_node, :] = graphin.nodes[iter_node][pos]
+
+    # Create a connectivity matrix using k-neighbors
+    A = kneighbors_graph(tmp_data, nrneighbors, mode='connectivity', include_self=False)
+    A = A.toarray()
+
+    for iter_i in range(len(graphin.nodes)):
+        for iter_j in range(len(graphin.nodes)):
+            # Add an edge between nodes i,j if entry A_i,j is non-zero
+            if A[iter_i, iter_j] > 0:
+                graphin.add_edge(iter_i, iter_j)
+                # Use the Euclidean distance between node attribute selected by parameter "pos"
+                # to compute the edge weight
+                graphin.edges[(iter_i, iter_j)]["weight"] = np.exp(
+                    -LA.norm(tmp_data[iter_i, :] - tmp_data[iter_j, :], 2) / refdistance)
+
+
+# Initialize pod attributes
+init_attributes()
+
+# Add edges based on the pod coordinates
+add_edges_k8s(G, nrneighbors=3, pos='coords', refdistance=100)
