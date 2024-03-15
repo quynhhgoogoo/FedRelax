@@ -65,3 +65,6 @@ kubectl config set-context --current --namespace=fed-relax
 # Check if pod is binding to configmap
 # kubectl get pod <pod_name> -o yaml | grep configmap
 # kubectl get pods -o=jsonpath='{range .items[*]}Pod: {.metadata.name}{"\nAnnotations:\n"}{range .metadata.annotations}{.key}: {.value}{"\n"}{end}{"\n\n"}{end}'
+
+# Download image to local machine
+# kubectl cp server-6b7cd85fd6-q4vnj:/app/init_graph.png ./output/after_graph.png

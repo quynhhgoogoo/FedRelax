@@ -7,6 +7,7 @@ from sklearn.neighbors import kneighbors_graph
 from numpy import linalg as LA
 import time
 from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 
 # Load the graph object from the pickle file
 G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
@@ -20,12 +21,12 @@ for iter_node in G.nodes():
 config.load_incluster_config()
 
 # Get pod's name and IP addresses {pod_name:IP}
-def get_pod_info(namespace="fed-relax"):
+def get_pod_info(label_selector, namespace="fed-relax"):
     config.load_incluster_config()
     v1 = client.CoreV1Api()
 
     pod_info = {}
-    pods = v1.list_namespaced_pod(namespace=namespace, label_selector="app=fedrelax-client")
+    pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
 
     for pod in pods.items:
         pod_info[pod.metadata.name] = pod.status.pod_ip
@@ -69,15 +70,15 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
 
 def init_attributes():
 # Should modify and scale later
-    num_pods = min(len(list(get_pod_info())), len(G.nodes()))
+    num_pods = min(len(list(get_pod_info(label_selector="app=fedrelax-client"))), len(G.nodes()))
 
     # Iterate through the nodes and update Kubernetes pods
     for iter_node in range(num_pods):
         i = iter_node
         node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
         
-        pod_name = list(get_pod_info())[i]
-        pod_ip = list(get_pod_info().values())[i]
+        pod_name = list(get_pod_info(label_selector="app=fedrelax-client"))[i]
+        pod_ip = list(get_pod_info(label_selector="app=fedrelax-client").values())[i]
 
         # Construct the new attributes based on 'node_features'
         configmap_data = {
@@ -102,7 +103,7 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace
     graphin.remove_edges_from(edges)
 
     # Get pod information from the Kubernetes cluster
-    pod_info = get_pod_info(namespace)
+    pod_info = get_pod_info(namespace=namespace, label_selector="app=fedrelax-client")
 
     # Build up a numpy array tmp_data which has one row for each pod in graphin
     num_nodes = len(graphin.nodes())
@@ -132,9 +133,24 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace
                 graphin.edges[(iter_i, iter_j)]["weight"] = np.exp(
                     -LA.norm(tmp_data[iter_i, :] - tmp_data[iter_j, :], 2) / refdistance)
 
+# Function to visualize the graph and save the image
+def visualize_and_save_graph(graph, output_path):
+    pos = nx.spring_layout(graph)  # Compute layout for visualization
+    plt.figure(figsize=(10, 10))
+    nx.draw(graph, pos, with_labels=True, node_size=3000, node_color='skyblue', font_size=10, font_weight='bold')
+    plt.title("Graph Visualization")
+    plt.savefig(output_path)  # Save the image to a file
+    print(f"Image is successfully saved in {output_path}")
+    plt.show()  # Display the graph
 
 # Initialize pod attributes
 init_attributes()
 
+# Call the visualization function before adding edges
+visualize_and_save_graph(G, '/app/init_graph.png')
+
 # Add edges based on the pod coordinates
 add_edges_k8s(G, nrneighbors=2, pos='coords', refdistance=100)
+
+# Call the visualization function after adding edges
+visualize_and_save_graph(G, '/app/after_graph.png')
