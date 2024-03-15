@@ -104,26 +104,26 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace
     # Get pod information from the Kubernetes cluster
     pod_info = get_pod_info(namespace)
 
-    # Build up a numpy array tmp_data which has one row for each pod in graphinloa
-    tmp_data = np.zeros((len(graphin.nodes()), len(next(iter(graphin.nodes().values())))))
-    
+    # Build up a numpy array tmp_data which has one row for each pod in graphin
+    num_nodes = len(graphin.nodes())
+    node_shape = len(next(iter(graphin.nodes(data=True)))[1].get(pos, []))
+    tmp_data = np.zeros((num_nodes, node_shape))
+
     # Iterate over the nodes and their attributes
-    for iter_node in graphin.nodes(data=True):
-        node_index, node_attr = iter_node
-        # Check if the 'coords' attribute exists for the node
-        if pos in node_attr:
-            # Each row of tmp_data holds the numpy array stored in the node attribute selected by parameter "pos"
+    for node_index, node_attr in graphin.nodes(data=True):
+        # Check if the 'coords' attribute exists for the node and has the correct shape
+        if pos in node_attr and len(node_attr[pos]) == node_shape:
             tmp_data[node_index, :] = node_attr[pos]
         else:
-            # Handle the case where the attribute is missing for a node
-            print(f"Attribute '{pos}' not found for node {node_index}")
+            # Handle the case where the attribute is missing or has an incorrect shape for a node
+            print(f"Attribute '{pos}' not found or has incorrect shape for node {node_index}")
 
     # Create a connectivity matrix using k-neighbors
     A = kneighbors_graph(tmp_data, nrneighbors, mode='connectivity', include_self=False)
     A = A.toarray()
 
-    for iter_i in range(len(graphin.nodes())):
-        for iter_j in range(len(graphin.nodes())):
+    for iter_i in range(num_nodes):
+        for iter_j in range(num_nodes):
             # Add an edge between nodes i,j if entry A_i,j is non-zero
             if A[iter_i, iter_j] > 0:
                 graphin.add_edge(iter_i, iter_j)
