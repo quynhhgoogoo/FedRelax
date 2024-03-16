@@ -60,12 +60,22 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
     v1 = client.CoreV1Api()
     pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
 
+    # Debug: Print the contents of the Pod
+    # print("Pod object before update:")
+    # print(pod)
+
     # Update pod attributes to reference the ConfigMap
     new_labels = {"configmap-name": configmap_name}
     pod.metadata.labels.update(new_labels)
 
     # Apply the changes
-    v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
+    try:
+        v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
+        # Debug: Print the contents of the Pod
+        # print("Pod object after update:")
+        # print(pod)
+    except Exception as e:
+        print(f"Error updating Pod attributes: {e}")
 
 
 def init_attributes():
@@ -133,15 +143,14 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace
                     -LA.norm(tmp_data[iter_i, :] - tmp_data[iter_j, :], 2) / refdistance)
 
 
-# Function to visualize the graph and save the image
 def visualize_and_save_graph(graph, output_path):
     pos = nx.spring_layout(graph)  # Compute layout for visualization
     plt.figure(figsize=(10, 10))
     nx.draw(graph, pos, with_labels=True, node_size=3000, node_color='skyblue', font_size=10, font_weight='bold')
     plt.title("Graph Visualization")
-    plt.savefig(output_path)  # Save the image to a file
+    plt.savefig(output_path) 
     print(f"Image is successfully saved in {output_path}")
-    plt.show()  # Display the graph
+    plt.show() 
 
 # FedRelax main algorithm
 def fed_relax_k8s(graph, X_test, regparam=0, maxiter=100, namespace="fed-relax"):
@@ -149,10 +158,16 @@ def fed_relax_k8s(graph, X_test, regparam=0, maxiter=100, namespace="fed-relax")
     testsize = X_test.shape[0]
 
     # Attach a DecisionTreeRegressor as the local model to each node in G
-    for node_i in graph.nodes(data=False):
-        pod_name = list(get_pod_info(namespace="fed-relax", label_selector="app=fedrelax-client"))[node_i]
-        print(f"Available pod names: {pod_name}")
-        print(f"Node index: {node_i}")
+    pod_names = list(get_pod_info(namespace="fed-relax", label_selector="app=fedrelax-client"))
+    num_nodes = len(graph.nodes())
+
+    if not pod_names:
+        print("Error: No pod names available.")
+        return
+
+    for node_i in range(min(num_nodes, len(pod_names))):
+        pod_name = pod_names[node_i]
+        print(f"Selected pod name for node {node_i}: {pod_name}")  # Debug: Print selected pod name
 
         # Construct the new attributes based on 'node_features'
         new_pod_attributes = {
@@ -169,11 +184,19 @@ def fed_relax_k8s(graph, X_test, regparam=0, maxiter=100, namespace="fed-relax")
     for iter_GD in range(maxiter):
         # Iterate over all nodes in the graph
         for node_i in graph.nodes(data=False):
-            pod_name_i = list(get_pod_info(namespace))[node_i]
+            if node_i >= len(pod_names):
+                print(f"Error: Node index {node_i} is out of range.")
+                continue
+
+            pod_name_i = pod_names[node_i]
 
             # Share predictions with neighbors
             for node_j in graph[node_i]:
-                pod_name_j = list(get_pod_info(namespace))[node_j]
+                if node_j >= len(pod_names):
+                    print(f"Error: Node index {node_j} is out of range.")
+                    continue
+
+                pod_name_j = pod_names[node_j]
 
                 # Add the predictions of the current hypothesis at node j as labels
                 neighbourpred = graph.nodes[node_j]["model"].predict(X_test).reshape(-1, 1)
@@ -209,7 +232,7 @@ def fed_relax_k8s(graph, X_test, regparam=0, maxiter=100, namespace="fed-relax")
 init_attributes()
 
 # Filter the graph to include only the first four nodes
-subgraph_nodes = list(G.nodes())[:4]
+subgraph_nodes = list(G.nodes())[:3]
 subgraph = G.subgraph(subgraph_nodes).copy()
 
 # Call the visualization function before adding edges
