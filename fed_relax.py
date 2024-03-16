@@ -128,8 +128,7 @@ def add_edges_k8s(graphin, nrneighbors=3, pos='coords', refdistance=1, namespace
             # Add an edge between nodes i,j if entry A_i,j is non-zero
             if A[iter_i, iter_j] > 0:
                 graphin.add_edge(iter_i, iter_j)
-                # Use the Euclidean distance between node attribute selected by parameter "pos"
-                # to compute the edge weight
+                # Use the Euclidean distance between node attribute selected by parameter "pos" to compute the edge weight
                 graphin.edges[(iter_i, iter_j)]["weight"] = np.exp(
                     -LA.norm(tmp_data[iter_i, :] - tmp_data[iter_j, :], 2) / refdistance)
 
@@ -146,11 +145,15 @@ def visualize_and_save_graph(graph, output_path):
 # Initialize pod attributes
 init_attributes()
 
+# Filter the graph to include only the first four nodes
+subgraph_nodes = list(G.nodes())[:4]
+subgraph = G.subgraph(subgraph_nodes).copy()
+
 # Call the visualization function before adding edges
-visualize_and_save_graph(G, '/app/init_graph.png')
+visualize_and_save_graph(subgraph, '/app/init_graph.png')
 
 # Add edges based on the pod coordinates
-add_edges_k8s(G, nrneighbors=2, pos='coords', refdistance=100)
+add_edges_k8s(subgraph, nrneighbors=2, pos='coords', refdistance=100)
 
 # Call the visualization function after adding edges
-visualize_and_save_graph(G, '/app/after_graph.png')
+visualize_and_save_graph(subgraph, '/app/after_graph.png')
