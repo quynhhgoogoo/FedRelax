@@ -1,4 +1,5 @@
 from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
 import pickle
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
@@ -72,14 +73,14 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
     try:
         v1.replace_namespaced_pod(name=pod_name, namespace=namespace, body=pod)
         # Debug: Print the contents of the Pod
-        # print("Pod object after update:")
-        # print(pod)
-    except Exception as e:
+        print("Pod object after update:")
+        print(pod)
+    except ApiException as e:
         print(f"Error updating Pod attributes: {e}")
 
 
 def init_attributes():
-# Should modify and scale later
+    # Should modify and scale later
     num_pods = min(len(list(get_pod_info(label_selector="app=fedrelax-client"))), len(G.nodes()))
 
     # Iterate through the nodes and update Kubernetes pods
@@ -95,6 +96,7 @@ def init_attributes():
             "coords": node_features.tolist(),
             "Xtrain": G.nodes[iter_node]["Xtrain"].tolist(),
             "ytrain": G.nodes[iter_node]["ytrain"].tolist(),
+            "model": DecisionTreeRegressor(),  # Initialize the model attribute
         }
 
         configmap_name = f"node-configmap-{iter_node}"
@@ -157,76 +159,59 @@ def fed_relax_k8s(graph, X_test, regparam=0, maxiter=100, namespace="fed-relax")
     # Determine the number of data points in the test set
     testsize = X_test.shape[0]
 
-    # Attach a DecisionTreeRegressor as the local model to each node in G
-    pod_names = list(get_pod_info(namespace="fed-relax", label_selector="app=fedrelax-client"))
-    num_nodes = len(graph.nodes())
+    # Get the list of pod names
+    pod_names = list(get_pod_info(namespace=namespace, label_selector="app=fedrelax-client"))
 
-    if not pod_names:
-        print("Error: No pod names available.")
-        return
+    # Iterate over all nodes in the graph
+    for iter_i, node_i in enumerate(graph.nodes(data=False)):
+        if iter_i >= len(pod_names):
+            print(f"Error: Node index {iter_i} is out of range.")
+            continue
 
-    for node_i in range(min(num_nodes, len(pod_names))):
-        pod_name = pod_names[node_i]
-        print(f"Selected pod name for node {node_i}: {pod_name}")  # Debug: Print selected pod name
+        pod_name_i = pod_names[iter_i]
 
-        # Construct the new attributes based on 'node_features'
-        new_pod_attributes = {
-            "Xtrain": graph.nodes[node_i]["Xtrain"].tolist(),
-            "ytrain": graph.nodes[node_i]["ytrain"].tolist(),
-            "model": None,  # Initialize the model attribute
-            "sample_weight": np.ones((len(graph.nodes[node_i]["ytrain"]), 1)).tolist(),
-        }
+        # Get the model for the current node
+        model = DecisionTreeRegressor()
 
-        # Update the Kubernetes pod with the new attributes
-        update_pod_attributes(pod_name, new_pod_attributes, namespace)
-
-    # Repeat the local updates (simultaneously at all nodes) for maxiter iterations
-    for iter_GD in range(maxiter):
-        # Iterate over all nodes in the graph
-        for node_i in graph.nodes(data=False):
-            if node_i >= len(pod_names):
-                print(f"Error: Node index {node_i} is out of range.")
+        # Share predictions with neighbors
+        for node_j in graph[node_i]:
+            if node_j >= len(pod_names):
+                print(f"Error: Node index {node_j} is out of range.")
                 continue
 
-            pod_name_i = pod_names[node_i]
+            pod_name_j = pod_names[node_j]
 
-            # Share predictions with neighbors
-            for node_j in graph[node_i]:
-                if node_j >= len(pod_names):
-                    print(f"Error: Node index {node_j} is out of range.")
-                    continue
+            # Add the predictions of the current hypothesis at node j as labels
+            neighbourpred = graph.nodes[node_j]["model"].predict(X_test).reshape(-1, 1)
 
-                pod_name_j = pod_names[node_j]
+            # Update the Xtrain, ytrain, and sample_weight attributes of node_i
+            new_attributes_i = {
+                "Xtrain": np.vstack((graph.nodes[node_i]["Xtrain"], X_test)).tolist(),
+                "ytrain": np.vstack((graph.nodes[node_i]["ytrain"], neighbourpred)).tolist(),
+                "sample_weight": np.vstack((
+                    graph.nodes[node_i]["sample_weight"],
+                    (regparam * len(graph.nodes[node_i]["ytrain"]) / testsize) * graph.edges[(node_i, node_j)]["weight"] * np.ones((len(neighbourpred), 1))
+                )).tolist(),
+                "model": model,  # Include the model attribute
+            }
 
-                # Add the predictions of the current hypothesis at node j as labels
-                neighbourpred = graph.nodes[node_j]["model"].predict(X_test).reshape(-1, 1)
+            # Update the attributes of node_i in the Kubernetes pod
+            update_pod_attributes(pod_name_i, new_attributes_i, namespace)
 
-                # Update the Xtrain, ytrain, and sample_weight attributes of node_i
-                new_attributes_i = {
-                    "Xtrain": np.vstack((graph.nodes[node_i]["Xtrain"], X_test)).tolist(),
-                    "ytrain": np.vstack((graph.nodes[node_i]["ytrain"], neighbourpred)).tolist(),
-                    "sample_weight": np.vstack((
-                        graph.nodes[node_i]["sample_weight"],
-                        (regparam * len(graph.nodes[node_i]["ytrain"]) / testsize) * graph.edges[
-                            (node_i, node_j)]["weight"] * np.ones((len(neighbourpred), 1))
-                    )).tolist(),
-                }
+            # Augment local dataset at node i by a new dataset obtained from the features of the test set
+            graph.nodes[node_i]["Xtrain"] = new_attributes_i["Xtrain"]
+            graph.nodes[node_i]["ytrain"] = new_attributes_i["ytrain"]
+            graph.nodes[node_i]["sample_weight"] = new_attributes_i["sample_weight"]
 
-                # Update the attributes of node_i in the Kubernetes pod
-                update_pod_attributes(pod_name_i, new_attributes_i, namespace)
+        # Fit the local model with the augmented dataset and sample weights
+        model.fit(
+            np.array(graph.nodes[node_i]["Xtrain"]),
+            np.array(graph.nodes[node_i]["ytrain"]),
+            sample_weight=np.array(graph.nodes[node_i]["sample_weight"]).reshape(-1)
+        )
 
-                # Augment local dataset at node i by a new dataset obtained from the features of the test set
-                graph.nodes[node_i]["Xtrain"] = new_attributes_i["Xtrain"]
-                graph.nodes[node_i]["ytrain"] = new_attributes_i["ytrain"]
-                graph.nodes[node_i]["sample_weight"] = new_attributes_i["sample_weight"]
-
-            # Fit the local model with the augmented dataset and sample weights
-            graph.nodes[node_i]["model"].fit(
-                np.array(graph.nodes[node_i]["Xtrain"]),
-                np.array(graph.nodes[node_i]["ytrain"]),
-                sample_weight=np.array(graph.nodes[node_i]["sample_weight"]).reshape(-1)
-            )
-
+        # Update the model attribute in the graph
+        graph.nodes[node_i]["model"] = model
 
 # Initialize pod attributes
 init_attributes()
