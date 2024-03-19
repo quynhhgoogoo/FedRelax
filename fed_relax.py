@@ -172,11 +172,47 @@ def visualize_and_save_graph(graph, output_path):
     print(f"Image is successfully saved in {output_path}")
     plt.show()  # Display the graph
 
+# Fed Relax's main function
+def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client", regparam=0, maxiter=100):
+    # Determine the number of data points in the test set
+    testsize = Xtest.shape[0]
+    
+    # Retrieve pod attributes and create a graph from the pods
+    G = add_edges_k8s(namespace=namespace)
+    
+    # Attach a DecisionTreeRegressor as the local model to each pod
+    for pod_name, attributes in get_pod_attributes(namespace=namespace, label_selector=label_selector).items():
+        G.nodes[pod_name]["model"] = DecisionTreeRegressor(max_depth=4).fit(attributes["Xtrain"], attributes["ytrain"])
+        G.nodes[pod_name]["sample_weight"] = np.ones((len(attributes["ytrain"]), 1))  # Initialize sample weights
+    
+    # Repeat the local updates (simultaneously at all pods) for maxiter iterations
+    for iter_GD in range(maxiter):
+        # Iterate over all pods in the graph
+        for pod_name, attributes in get_pod_attributes(namespace=namespace, label_selector=label_selector).items():
+            # Share predictions with neighbors
+            for neighbor_pod_name in G[pod_name]:
+                # Add the predictions of the current hypothesis at neighbor pod as labels
+                neighbor_pred = G.nodes[neighbor_pod_name]["model"].predict(Xtest).reshape(-1, 1)
+                G.nodes[pod_name]["ytrain"] = np.vstack((G.nodes[pod_name]["ytrain"], neighbor_pred))
+                
+                # Augment local dataset at pod by a new dataset obtained from the features of the test set
+                G.nodes[pod_name]["Xtrain"] = np.vstack((G.nodes[pod_name]["Xtrain"], Xtest))
+                
+                # Set sample weights of added local dataset according to edge weight of edge pod <-> neighbor_pod
+                # and GTV regularization parameter
+                sample_weight_aug = (regparam * len(G.nodes[pod_name]["ytrain"]) / testsize)
+                G.nodes[pod_name]["sample_weight"] = np.vstack((G.nodes[pod_name]["sample_weight"], sample_weight_aug * G.edges[(pod_name, neighbor_pod_name)]["weight"] * np.ones((len(neighbor_pred), 1))))
+            
+            # Fit the local model with the augmented dataset and sample weights
+            G.nodes[pod_name]["model"].fit(G.nodes[pod_name]["Xtrain"], G.nodes[pod_name]["ytrain"], sample_weight=G.nodes[pod_name]["sample_weight"].reshape(-1))
+    
+    return G
+
 # Initialize pod attributes
 init_attributes()
 
-# Filter the graph to include only the first four nodes
-subgraph_nodes = list(G.nodes())[:4]
+# Filter the graph to include only the first three nodes
+subgraph_nodes = list(G.nodes())[:3]
 subgraph = G.subgraph(subgraph_nodes).copy()
 
 # Call the visualization function before adding edges
@@ -187,3 +223,26 @@ updated_graph = add_edges_k8s()
 
 # Call the visualization function after adding edges
 visualize_and_save_graph(updated_graph, '/app/after_graph.png')
+
+# Generate global test_set
+X_test = np.arange(0.0, 1, 0.1)[:, np.newaxis]
+
+# Get the start time
+st = time.time()
+
+# Run FedRelax on Kubernetes
+updated_graph = FedRelax(X_test)
+
+end = time.time()
+print("runtime of FedRelax ", end - st)
+
+# Compute node-wise train and val errors
+for iter_node in subgraph.nodes():
+    trained_local_model = subgraph.nodes[iter_node]["model"]
+    train_features = subgraph.nodes[iter_node]["Xtrain"]
+    train_labels = subgraph.nodes[iter_node]["ytrain"]
+    subgraph.nodes[iter_node]["trainerr"] = mean_squared_error(train_labels, trained_local_model.predict(train_features))
+    # Assuming you have validation data for each node
+    val_features = subgraph.nodes[iter_node]["Xval"]
+    val_labels = subgraph.nodes[iter_node]["yval"]
+    subgraph.nodes[iter_node]["valerr"] = mean_squared_error(val_labels, trained_local_model.predict(val_features))
