@@ -69,7 +69,7 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
 
 
 def init_attributes():
-# Should modify and scale later
+    # Should modify and scale later
     num_pods = min(len(list(get_pod_info(label_selector="app=fedrelax-client"))), len(G.nodes()))
 
     # Iterate through the nodes and update Kubernetes pods
@@ -126,12 +126,16 @@ def get_pod_attributes(namespace="fed-relax", label_selector="app=fedrelax-clien
             
             # Extract relevant attributes from the config map data
             coords_str = config_map.data.get("coords")
-            # Remove '[' and ']' characters and then split by ','
-            coords_str = coords_str.strip('[]')
-            coords = [float(coord) for coord in coords_str.split(',')]
+            coords = [float(coord) for coord in coords_str.strip('[]').split(',') if coord.strip()]
+            
+            Xtrain_str = config_map.data.get("Xtrain")
+            Xtrain = [float(x.strip(' []')) for x in Xtrain_str.split(',') if x.strip()]
+            
+            ytrain_str = config_map.data.get("ytrain")
+            ytrain = [float(y.strip(' []')) for y in ytrain_str.split(',') if y.strip()]
             
             # Store pod attributes
-            pod_info[pod_name] = {"coords": coords}
+            pod_info[pod_name] = {"coords": coords, "Xtrain": Xtrain, "ytrain": ytrain}
     
     return pod_info
 
@@ -182,7 +186,9 @@ def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client",
     
     # Attach a DecisionTreeRegressor as the local model to each pod
     for pod_name, attributes in get_pod_attributes(namespace=namespace, label_selector=label_selector).items():
-        G.nodes[pod_name]["model"] = DecisionTreeRegressor(max_depth=4).fit(attributes["Xtrain"], attributes["ytrain"])
+        Xtrain = np.array(attributes["Xtrain"]).reshape(-1, 1)
+        ytrain = np.array(attributes["ytrain"])
+        G.nodes[pod_name]["model"] = DecisionTreeRegressor(max_depth=4).fit(Xtrain, ytrain)
         G.nodes[pod_name]["sample_weight"] = np.ones((len(attributes["ytrain"]), 1))  # Initialize sample weights
     
     # Repeat the local updates (simultaneously at all pods) for maxiter iterations
@@ -193,7 +199,9 @@ def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client",
             for neighbor_pod_name in G[pod_name]:
                 # Add the predictions of the current hypothesis at neighbor pod as labels
                 neighbor_pred = G.nodes[neighbor_pod_name]["model"].predict(Xtest).reshape(-1, 1)
-                G.nodes[pod_name]["ytrain"] = np.vstack((G.nodes[pod_name]["ytrain"], neighbor_pred))
+                neighbor_pred_array = np.array(neighbor_pred)
+                neighbor_pred_reshaped = neighbor_pred_array.reshape(-1, G.nodes[pod_name]["ytrain"].shape[1])  # Reshape with the same number of columns
+                G.nodes[pod_name]["ytrain"] = np.vstack((G.nodes[pod_name]["ytrain"], neighbor_pred_reshaped))
                 
                 # Augment local dataset at pod by a new dataset obtained from the features of the test set
                 G.nodes[pod_name]["Xtrain"] = np.vstack((G.nodes[pod_name]["Xtrain"], Xtest))
