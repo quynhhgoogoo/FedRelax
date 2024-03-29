@@ -76,7 +76,6 @@ def init_attributes():
     for iter_node in range(num_pods):
         i = iter_node
         node_features = np.array([np.mean(G.nodes[iter_node]["Xtrain"]), np.mean(G.nodes[iter_node]["ytrain"])])
-        
         pod_name = list(get_pod_info(label_selector="app=fedrelax-client"))[i]
         pod_ip = list(get_pod_info(label_selector="app=fedrelax-client").values())[i]
 
@@ -132,6 +131,8 @@ def get_pod_attributes(namespace="fed-relax", label_selector="app=fedrelax-clien
             Xtrain = [float(x.strip(' []')) for x in Xtrain_str.split(',') if x.strip()]
             
             ytrain_str = config_map.data.get("ytrain")
+            print("ytrain_str:", ytrain_str)  # Add this line for debugging
+            
             ytrain = [float(y.strip(' []')) for y in ytrain_str.split(',') if y.strip()]
             
             # Store pod attributes
@@ -184,35 +185,32 @@ def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client",
     # Retrieve pod attributes and create a graph from the pods
     G = add_edges_k8s(namespace=namespace)
     
-    # Attach a DecisionTreeRegressor as the local model to each pod
-    for pod_name, attributes in get_pod_attributes(namespace=namespace, label_selector=label_selector).items():
-        Xtrain = np.array(attributes["Xtrain"]).reshape(-1, 1)
-        ytrain = np.array(attributes["ytrain"])
-        G.nodes[pod_name]["model"] = DecisionTreeRegressor(max_depth=4).fit(Xtrain, ytrain)
-        G.nodes[pod_name]["sample_weight"] = np.ones((len(attributes["ytrain"]), 1))  # Initialize sample weights
+    # Attach a DecisionTreeRegressor as the local model to each node in G
+    for node_i in G.nodes(data=False): 
+        G.nodes[node_i]["model"] = DecisionTreeRegressor(max_depth=4).fit(np.array(G.nodes[node_i]["Xtrain"]).reshape(-1,1), np.array(G.nodes[node_i]["ytrain"]))
+        G.nodes[node_i]["sample_weight"] = np.ones((len(G.nodes[node_i]["ytrain"]), 1))  # Initialize sample weights
     
-    # Repeat the local updates (simultaneously at all pods) for maxiter iterations
+    # Repeat the local updates (simultaneously at all nodes) for maxiter iterations
     for iter_GD in range(maxiter):
-        # Iterate over all pods in the graph
-        for pod_name, attributes in get_pod_attributes(namespace=namespace, label_selector=label_selector).items():
+        # Iterate over all nodes in the graph
+        for node_i in G.nodes(data=False):
             # Share predictions with neighbors
-            for neighbor_pod_name in G[pod_name]:
-                # Add the predictions of the current hypothesis at neighbor pod as labels
-                neighbor_pred = G.nodes[neighbor_pod_name]["model"].predict(Xtest).reshape(-1, 1)
-                neighbor_pred_array = np.array(neighbor_pred)
-                neighbor_pred_reshaped = neighbor_pred_array.reshape(-1, G.nodes[pod_name]["ytrain"].shape[1])  # Reshape with the same number of columns
-                G.nodes[pod_name]["ytrain"] = np.vstack((G.nodes[pod_name]["ytrain"], neighbor_pred_reshaped))
+            for node_j in G[node_i]:
+                # Add the predictions of the current hypothesis at node j as labels
+                neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
+                neighbourpred = np.tile(neighbourpred, (1, len(G.nodes[node_i]["ytrain"][0])))
+                G.nodes[node_i]["ytrain"] = np.vstack((G.nodes[node_i]["ytrain"], neighbourpred))
                 
-                # Augment local dataset at pod by a new dataset obtained from the features of the test set
-                G.nodes[pod_name]["Xtrain"] = np.vstack((G.nodes[pod_name]["Xtrain"], Xtest))
+                # Augment local dataset at node i by a new dataset obtained from the features of the test set
+                G.nodes[node_i]["Xtrain"] = np.vstack((G.nodes[node_i]["Xtrain"], Xtest))
                 
-                # Set sample weights of added local dataset according to edge weight of edge pod <-> neighbor_pod
+                # Set sample weights of added local dataset according to edge weight of edge i <-> j
                 # and GTV regularization parameter
-                sample_weight_aug = (regparam * len(G.nodes[pod_name]["ytrain"]) / testsize)
-                G.nodes[pod_name]["sample_weight"] = np.vstack((G.nodes[pod_name]["sample_weight"], sample_weight_aug * G.edges[(pod_name, neighbor_pod_name)]["weight"] * np.ones((len(neighbor_pred), 1))))
+                sampleweightaug = (regparam * len(G.nodes[node_i]["ytrain"]) / testsize)
+                G.nodes[node_i]["sample_weight"] = np.vstack((G.nodes[node_i]["sample_weight"], sampleweightaug * G.edges[(node_i, node_j)]["weight"] * np.ones((len(neighbourpred), 1))))
             
             # Fit the local model with the augmented dataset and sample weights
-            G.nodes[pod_name]["model"].fit(G.nodes[pod_name]["Xtrain"], G.nodes[pod_name]["ytrain"], sample_weight=G.nodes[pod_name]["sample_weight"].reshape(-1))
+            G.nodes[node_i]["model"].fit(G.nodes[node_i]["Xtrain"], G.nodes[node_i]["ytrain"], sample_weight=G.nodes[node_i]["sample_weight"].reshape(-1))
     
     return G
 
@@ -228,18 +226,21 @@ visualize_and_save_graph(subgraph, '/app/init_graph.png')
 
 # Add edges based on the pod coordinates
 updated_graph = add_edges_k8s()
+print("Update graph", updated_graph.nodes())
+#for iter_node in G.nodes(): 
+#    print(G.nodes[iter_node])
 
 # Call the visualization function after adding edges
 visualize_and_save_graph(updated_graph, '/app/after_graph.png')
 
 # Generate global test_set
-X_test = np.arange(0.0, 1, 0.1)[:, np.newaxis]
+X_test = np.arange(0.0, 1, 0.1).reshape(-1, 1) 
 
 # Get the start time
 st = time.time()
 
 # Run FedRelax on Kubernetes
-updated_graph = FedRelax(X_test)
+final_graph = FedRelax(X_test)
 
 end = time.time()
 print("runtime of FedRelax ", end - st)

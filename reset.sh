@@ -33,6 +33,7 @@ docker push quynhhgoogoo/fed-relax-client:latest
 # Apply rbac with necessary permissions
 kubectl apply -f role.yaml
 kubectl apply -f role_binding.yaml
+kubectl apply -f service_account.yaml
 
 # Deployment scripts to simplify the process
 kubectl apply -f service.yaml
