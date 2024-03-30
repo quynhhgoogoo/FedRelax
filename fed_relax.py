@@ -141,9 +141,12 @@ def get_pod_attributes(namespace="fed-relax", label_selector="app=fedrelax-clien
     return pod_info
 
 
-def add_edges_k8s(namespace="fed-relax"):
+from sklearn.neighbors import kneighbors_graph
+
+def add_edges_k8s(namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
     """
-    Add edges to the graph based on pod attributes retrieved from Kubernetes config maps.
+    Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
+    using k-nearest neighbors approach.
     """
     # Get pod information from Kubernetes cluster
     pod_info = get_pod_attributes(namespace=namespace)
@@ -155,15 +158,24 @@ def add_edges_k8s(namespace="fed-relax"):
     for pod_name, attributes in pod_info.items():
         graph.add_node(pod_name, **attributes)
     
-    # Calculate distances and add edges based on pod attributes
-    for pod_name1, attr1 in pod_info.items():
-        for pod_name2, attr2 in pod_info.items():
-            if pod_name1 != pod_name2:
-                # Calculate distance between pods based on attributes (e.g., coordinates)
-                distance = np.linalg.norm(np.array(attr1["coords"]) - np.array(attr2["coords"]))
+    # Build a numpy array containing node positions
+    node_positions = np.array([attributes[pos] for attributes in pod_info.values()])
+    
+    # Calculate k-nearest neighbors graph
+    A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
+    
+    # Iterate over the k-nearest neighbors graph and add edges with weights
+    for i in range(len(pod_info)):
+        for j in range(len(pod_info)):
+            if A[i, j] > 0:
+                pod_name_i = list(pod_info.keys())[i]
+                pod_name_j = list(pod_info.keys())[j]
+                
+                # Calculate the Euclidean distance between pods based on their positions
+                distance = np.linalg.norm(node_positions[i] - node_positions[j])
                 
                 # Add edge with weight based on distance
-                graph.add_edge(pod_name1, pod_name2, weight=distance)
+                graph.add_edge(pod_name_i, pod_name_j, weight=distance)
     
     return graph
 
