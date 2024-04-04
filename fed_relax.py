@@ -71,6 +71,7 @@ def update_pod_attributes(pod_name, configmap_name, namespace="fed-relax"):
 def init_attributes():
     # Should modify and scale later
     num_pods = min(len(list(get_pod_info(label_selector="app=fedrelax-client"))), len(G.nodes()))
+    pod_info = {}
 
     # Iterate through the nodes and update Kubernetes pods
     for iter_node in range(num_pods):
@@ -81,9 +82,9 @@ def init_attributes():
 
         # Construct the new attributes based on 'node_features'
         configmap_data = {
-            "coords": node_features.tolist(),
-            "Xtrain": G.nodes[iter_node]["Xtrain"].tolist(),
-            "ytrain": G.nodes[iter_node]["ytrain"].tolist(),
+            "coords": node_features,
+            "Xtrain": G.nodes[iter_node]["Xtrain"],
+            "ytrain": G.nodes[iter_node]["ytrain"],
         }
 
         configmap_name = f"node-configmap-{iter_node}"
@@ -91,65 +92,26 @@ def init_attributes():
         # Create or update ConfigMap
         create_or_update_configmap(configmap_name, configmap_data)
         print(f"ConfigMap Data for {configmap_name}: {configmap_data}")
+        print("Shape of ConfigMap Data, Xtrain", np.array(configmap_data["Xtrain"]).shape)
+        print("Shape of ConfigMap Data, ytrain", np.array(configmap_data["ytrain"]).shape)
 
         # Update the Kubernetes pod with the new attributes
         update_pod_attributes(pod_name, configmap_name)
-        print(f"ConfigMap {configmap_name} created/updated successfully.")
+        print(f"ConfigMap {configmap_name} created/updated successfully.")\
 
-
-def get_pod_attributes(namespace="fed-relax", label_selector="app=fedrelax-client"):
-    """
-    Retrieve pod attributes from Kubernetes config maps.
-    """
-    # Load Kubernetes configuration
-    config.load_incluster_config()
-    
-    # Create Kubernetes API client
-    api_instance = client.CoreV1Api()
-    
-    # Retrieve list of pods matching the label selector
-    pods = api_instance.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
-    
-    pod_info = {}
-    
-    # Iterate over pods and retrieve attributes from config maps
-    for pod in pods.items:
-        # Get pod name and namespace
-        pod_name = pod.metadata.name
-        
-        # Retrieve config map associated with the pod
-        config_map_name = pod.metadata.labels.get("configmap-name")
-        if config_map_name:
-            # Retrieve config map data
-            config_map = api_instance.read_namespaced_config_map(name=config_map_name, namespace=namespace)
-            
-            # Extract relevant attributes from the config map data
-            coords_str = config_map.data.get("coords")
-            coords = [float(coord) for coord in coords_str.strip('[]').split(',') if coord.strip()]
-            
-            Xtrain_str = config_map.data.get("Xtrain")
-            Xtrain = [float(x.strip(' []')) for x in Xtrain_str.split(',') if x.strip()]
-            
-            ytrain_str = config_map.data.get("ytrain")
-            print("ytrain_str:", ytrain_str)  # Add this line for debugging
-            
-            ytrain = [float(y.strip(' []')) for y in ytrain_str.split(',') if y.strip()]
-            
-            # Store pod attributes
-            pod_info[pod_name] = {"coords": coords, "Xtrain": Xtrain, "ytrain": ytrain}
+        # Store pod attributes
+        pod_info[pod_name] = {"coords": node_features, "Xtrain": np.array(configmap_data["Xtrain"]), "ytrain": np.array(configmap_data["Xtrain"])}
     
     return pod_info
 
 
-from sklearn.neighbors import kneighbors_graph
-
-def add_edges_k8s(namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
+def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
     """
     # Get pod information from Kubernetes cluster
-    pod_info = get_pod_attributes(namespace=namespace)
+    # pod_info = get_pod_attributes(namespace=namespace)
     
     # Initialize empty graph
     graph = nx.Graph()
@@ -159,7 +121,7 @@ def add_edges_k8s(namespace="fed-relax", nrneighbors=1, pos='coords', refdistanc
         graph.add_node(pod_name, **attributes)
     
     # Build a numpy array containing node positions
-    node_positions = np.array([attributes[pos] for attributes in pod_info.values()])
+    node_positions = np.array([attributes["coords"] for attributes in pod_info.values()], dtype=float)
     
     # Calculate k-nearest neighbors graph
     A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
@@ -190,12 +152,9 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 # Fed Relax's main function
-def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client", regparam=0, maxiter=100):
+def FedRelax(Xtest, updated_graph, namespace="fed-relax", label_selector="app=fedrelax-client", regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
-    
-    # Retrieve pod attributes and create a graph from the pods
-    G = add_edges_k8s(namespace=namespace)
     
     # Attach a DecisionTreeRegressor as the local model to each node in G
     for node_i in G.nodes(data=False): 
@@ -227,7 +186,7 @@ def FedRelax(Xtest, namespace="fed-relax", label_selector="app=fedrelax-client",
     return G
 
 # Initialize pod attributes
-init_attributes()
+pod_info = init_attributes()
 
 # Filter the graph to include only the first three nodes
 subgraph_nodes = list(G.nodes())[:3]
@@ -237,10 +196,15 @@ subgraph = G.subgraph(subgraph_nodes).copy()
 visualize_and_save_graph(subgraph, '/app/init_graph.png')
 
 # Add edges based on the pod coordinates
-updated_graph = add_edges_k8s()
+updated_graph = add_edges_k8s(pod_info)
 print("Update graph", updated_graph.nodes())
+i = 'client-f44c98887-jw7wx'
 #for iter_node in G.nodes(): 
 #    print(G.nodes[iter_node])
+print("Attributes of graphs after update")
+print((np.array(updated_graph.nodes[i]["Xtrain"])).shape)
+print((np.array(updated_graph.nodes[i]["ytrain"])).shape)
+print((np.array(updated_graph.nodes[i]["coords"])).shape)
 
 # Call the visualization function after adding edges
 visualize_and_save_graph(updated_graph, '/app/after_graph.png')
@@ -252,18 +216,21 @@ X_test = np.arange(0.0, 1, 0.1).reshape(-1, 1)
 st = time.time()
 
 # Run FedRelax on Kubernetes
-final_graph = FedRelax(X_test)
+final_graph = FedRelax(X_test, updated_graph)
 
 end = time.time()
 print("runtime of FedRelax ", end - st)
 
 # Compute node-wise train and val errors
-for iter_node in subgraph.nodes():
-    trained_local_model = subgraph.nodes[iter_node]["model"]
-    train_features = subgraph.nodes[iter_node]["Xtrain"]
-    train_labels = subgraph.nodes[iter_node]["ytrain"]
-    subgraph.nodes[iter_node]["trainerr"] = mean_squared_error(train_labels, trained_local_model.predict(train_features))
-    # Assuming you have validation data for each node
-    val_features = subgraph.nodes[iter_node]["Xval"]
-    val_labels = subgraph.nodes[iter_node]["yval"]
-    subgraph.nodes[iter_node]["valerr"] = mean_squared_error(val_labels, trained_local_model.predict(val_features))
+for iter_node in final_graph.nodes():
+    if "model" in final_graph.nodes[iter_node]:  # Check if 'model' exists in the node attributes
+        trained_local_model = final_graph.nodes[iter_node]["model"]
+        train_features = final_graph.nodes[iter_node]["Xtrain"]
+        train_labels = final_graph.nodes[iter_node]["ytrain"]
+        final_graph.nodes[iter_node]["trainerr"] = mean_squared_error(train_labels, trained_local_model.predict(train_features))
+        # Assuming you have validation data for each node
+        val_features = final_graph.nodes[iter_node]["Xval"]
+        val_labels = final_graph.nodes[iter_node]["yval"]
+        final_graph.nodes[iter_node]["valerr"] = mean_squared_error(val_labels, trained_local_model.predict(val_features))
+    else:
+        print(f"Warning: 'model' attribute not found for node {iter_node}")
