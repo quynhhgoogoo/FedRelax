@@ -185,6 +185,43 @@ def FedRelax(Xtest, updated_graph, namespace="fed-relax", label_selector="app=fe
     
     return G
 
+
+def PlotFinalGraph(graphin, pos='coord', annotate="name", output_path='/app/final.png'):
+    # the numpy array x will hold the horizontal coord of markers for each node in emp. graph graphin
+    x = np.zeros(len(graphin.nodes))
+    # vertical coords of markers
+    y = np.zeros(len(graphin.nodes))
+
+    for iter_node in graphin.nodes:
+        x[iter_node] = graphin.nodes[iter_node][pos][0]
+        y[iter_node] = graphin.nodes[iter_node][pos][1]
+
+    # standardize the coordinates of node markers
+    x = (x - np.min(x, axis=0)) / np.std(x, axis=0) + 1
+    y = (y - np.min(y, axis=0)) / np.std(y, axis=0) + 1
+
+    # create a figure with prescribed dimensions
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    # generate a scatter plot with each marker representing a node in graphin
+    ax.scatter(x, y, 300, marker='o', color='Black')
+
+    # draw links between nodes if they are connected by an edge
+    for edge in graphin.edges:
+        node1 = edge[0]
+        node2 = edge[1]
+        if graphin.has_edge(node1, node2):  # Check if the edge exists
+            ax.plot([x[node1], x[node2]], [y[node1], y[node2]], c='black', lw=2)
+
+    # annotate each marker by the node attribute whose name is stored in the input parameter "annotate"
+    for iter_node in graphin.nodes:
+        ax.annotate(str(graphin.nodes[iter_node][annotate]), (x[iter_node] + 0.2, 0.995 * y[iter_node]), c="red")
+    ax.set_ylim(0.9 * np.min(y), 1.1 * np.max(y))
+    ax.set_xlim(0.9 * np.min(x), 1.1 * np.max(x))
+
+    plt.savefig(output_path)  # Save the image to a file
+    print(f"Final graph is successfully saved in {output_path}")
+
 # Initialize pod attributes
 pod_info = init_attributes()
 
@@ -217,6 +254,10 @@ st = time.time()
 
 # Run FedRelax on Kubernetes
 final_graph = FedRelax(X_test, updated_graph)
+
+# Plot the graph
+visualize_and_save_graph(updated_graph, '/app/final_graph.png')
+PlotFinalGraph(final_graph,pos='coords',annotate='name')
 
 end = time.time()
 print("runtime of FedRelax ", end - st)
