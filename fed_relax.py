@@ -1,3 +1,4 @@
+from turtle import pd
 from kubernetes import client, config
 import pickle
 import numpy as np
@@ -85,6 +86,8 @@ def init_attributes():
             "coords": node_features,
             "Xtrain": G.nodes[iter_node]["Xtrain"],
             "ytrain": G.nodes[iter_node]["ytrain"],
+            "Xval": G.nodes[iter_node]["Xval"],
+            "yval": G.nodes[iter_node]["yval"],
         }
 
         configmap_name = f"node-configmap-{iter_node}"
@@ -100,7 +103,7 @@ def init_attributes():
         print(f"ConfigMap {configmap_name} created/updated successfully.")\
 
         # Store pod attributes
-        pod_info[pod_name] = {"coords": node_features, "Xtrain": np.array(configmap_data["Xtrain"]), "ytrain": np.array(configmap_data["Xtrain"])}
+        pod_info[pod_name] = {"coords": node_features, "Xtrain": np.array(configmap_data["Xtrain"]), "ytrain": np.array(configmap_data["ytrain"]), "Xval": np.array(configmap_data["Xval"]), "yval": np.array(configmap_data["yval"])}
     
     return pod_info
 
@@ -155,6 +158,7 @@ def visualize_and_save_graph(graph, output_path):
 def FedRelax(Xtest, updated_graph, namespace="fed-relax", label_selector="app=fedrelax-client", regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
+    G = updated_graph
     
     # Attach a DecisionTreeRegressor as the local model to each node in G
     for node_i in G.nodes(data=False): 
@@ -186,41 +190,57 @@ def FedRelax(Xtest, updated_graph, namespace="fed-relax", label_selector="app=fe
     return G
 
 
-def PlotFinalGraph(graphin, pos='coord', annotate="name", output_path='/app/final.png'):
+def PlotFinalGraph(graphin, pos='coord', annotate='name'):
     # the numpy array x will hold the horizontal coord of markers for each node in emp. graph graphin
     x = np.zeros(len(graphin.nodes))
-    # vertical coords of markers
+    # vertical coords of markers 
     y = np.zeros(len(graphin.nodes))
 
-    for iter_node in graphin.nodes:
-        x[iter_node] = graphin.nodes[iter_node][pos][0]
-        y[iter_node] = graphin.nodes[iter_node][pos][1]
+    # Create a mapping between node names and their corresponding indices
+    name_to_index = {name: i for i, name in enumerate(graphin.nodes)}
 
-    # standardize the coordinates of node markers
-    x = (x - np.min(x, axis=0)) / np.std(x, axis=0) + 1
-    y = (y - np.min(y, axis=0)) / np.std(y, axis=0) + 1
+    for edge_dmy in graphin.edges:
+        node_i = name_to_index[edge_dmy[0]]  # Extract node indices from the edge tuple
+        node_j = name_to_index[edge_dmy[1]]  # Extract node indices from the edge tuple
 
-    # create a figure with prescribed dimensions
+        x[node_i] = graphin.nodes[edge_dmy[0]][pos][0]
+        x[node_j] = graphin.nodes[edge_dmy[1]][pos][0]
+
+        y[node_i] = graphin.nodes[edge_dmy[0]][pos][1]
+        y[node_j] = graphin.nodes[edge_dmy[1]][pos][1]
+
+    # standareize the coordinates of node markers 
+    x = (x - np.min(x, axis=0)) / np.std(x, axis=0) + 1 
+    y = (y - np.min(y, axis=0)) / np.std(y, axis=0) + 1 
+
+    # create a figure with prescribed dimensions 
     fig, ax = plt.subplots(figsize=(10, 10))
 
     # generate a scatter plot with each marker representing a node in graphin
     ax.scatter(x, y, 300, marker='o', color='Black')
 
-    # draw links between nodes if they are connected by an edge
-    for edge in graphin.edges:
-        node1 = edge[0]
-        node2 = edge[1]
-        if graphin.has_edge(node1, node2):  # Check if the edge exists
-            ax.plot([x[node1], x[node2]], [y[node1], y[node2]], c='black', lw=2)
+    # draw links between two nodes if they are connected by an edge 
+    # in the empirical graph. use the "weight" of the edge to determine the line thickness
+    for edge_dmy in graphin.edges:
+        node_i = name_to_index[edge_dmy[0]]  # Extract node indices from the edge tuple
+        node_j = name_to_index[edge_dmy[1]]  # Extract node indices from the edge tuple
+
+        ax.plot([x[node_i], x[node_j]], [y[node_i], y[node_j]], c='black', lw=4 * graphin.edges[edge_dmy]["weight"])
 
     # annotate each marker by the node attribute whose name is stored in the input parameter "annotate"
     for iter_node in graphin.nodes:
-        ax.annotate(str(graphin.nodes[iter_node][annotate]), (x[iter_node] + 0.2, 0.995 * y[iter_node]), c="red")
+        i = name_to_index[iter_node]
+        if annotate in graphin.nodes[iter_node]:
+            ax.annotate(str(graphin.nodes[iter_node][annotate]), (x[i] + 0.2, 0.995 * y[i]), c="red")
+        else:
+            ax.annotate(str(iter_node), (x[i] + 0.2, 0.995 * y[i]), c="red")
+
     ax.set_ylim(0.9 * np.min(y), 1.1 * np.max(y))
     ax.set_xlim(0.9 * np.min(x), 1.1 * np.max(x))
 
-    plt.savefig(output_path)  # Save the image to a file
-    print(f"Final graph is successfully saved in {output_path}")
+    plt.savefig('/app/final.png')  # Save the image to a file
+    print(f"Final graph is successfully saved in /app/final.png")
+
 
 # Initialize pod attributes
 pod_info = init_attributes()
@@ -256,7 +276,7 @@ st = time.time()
 final_graph = FedRelax(X_test, updated_graph)
 
 # Plot the graph
-visualize_and_save_graph(updated_graph, '/app/final_graph.png')
+visualize_and_save_graph(final_graph, '/app/final_graph.png')
 PlotFinalGraph(final_graph,pos='coords',annotate='name')
 
 end = time.time()
@@ -269,9 +289,34 @@ for iter_node in final_graph.nodes():
         train_features = final_graph.nodes[iter_node]["Xtrain"]
         train_labels = final_graph.nodes[iter_node]["ytrain"]
         final_graph.nodes[iter_node]["trainerr"] = mean_squared_error(train_labels, trained_local_model.predict(train_features))
-        # Assuming you have validation data for each node
-        val_features = final_graph.nodes[iter_node]["Xval"]
-        val_labels = final_graph.nodes[iter_node]["yval"]
-        final_graph.nodes[iter_node]["valerr"] = mean_squared_error(val_labels, trained_local_model.predict(val_features))
+        
+        # Check if 'Xval' and 'yval' exist in the node attributes
+        if "Xval" in final_graph.nodes[iter_node] and "yval" in final_graph.nodes[iter_node]:
+            val_features = final_graph.nodes[iter_node]["Xval"]
+            val_labels = final_graph.nodes[iter_node]["yval"]
+            final_graph.nodes[iter_node]["valerr"] = mean_squared_error(val_labels, trained_local_model.predict(val_features))
+        else:
+            print(f"Warning: 'Xval' or 'yval' attribute not found for node {iter_node}")
     else:
         print(f"Warning: 'model' attribute not found for node {iter_node}")
+
+
+print("average train error :",sum(nx.get_node_attributes(G, "trainerr").values())/len(G.nodes()))
+print("average val error :",sum(nx.get_node_attributes(G, "valerr").values())/len(G.nodes()))
+
+pod_to_int = {}
+for i, pod in enumerate(pod_info):
+    pod_to_int[i] = pod
+X_val = final_graph.nodes[pod_to_int[0]]["Xval"]
+y_1 = final_graph.nodes[pod_to_int[1]]["model"].predict(X_val)
+y_2 = final_graph.nodes[pod_to_int[2]]["model"].predict(X_val)
+
+# Plot the results
+# TODO: Current phase is for testing purposes only, need to update this later
+plt.figure()
+plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
+plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
+plt.plot(final_graph.nodes[pod_to_int[1]]["Xval"], final_graph.nodes[pod_to_int[0]]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+plt.plot(final_graph.nodes[pod_to_int[2]]["Xval"], final_graph.nodes[pod_to_int[1]]["yval"], color="red", label="val data second cluster", linewidth=2)
+plt.savefig('/app/validation.png')  # Save the image to a file
+print(f"Validation graph is successfully saved in /app/validation.png")
