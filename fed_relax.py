@@ -9,6 +9,7 @@ from numpy import linalg as LA
 import time
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
+import base64
 
 # Load the graph object from the pickle file
 G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
@@ -83,13 +84,12 @@ def init_attributes():
 
         # Construct the new attributes based on 'node_features'
         configmap_data = {
-            "coords": node_features,
-            "Xtrain": G.nodes[iter_node]["Xtrain"],
-            "ytrain": G.nodes[iter_node]["ytrain"],
-            "Xval": G.nodes[iter_node]["Xval"],
-            "yval": G.nodes[iter_node]["yval"],
+            "coords": base64.b64encode(pickle.dumps(np.array(node_features))).decode('utf-8'),
+            "Xtrain": base64.b64encode(pickle.dumps(G.nodes[iter_node]["Xtrain"])).decode('utf-8'),
+            "ytrain": base64.b64encode(pickle.dumps(G.nodes[iter_node]["ytrain"])).decode('utf-8'),
+            "Xval": base64.b64encode(pickle.dumps(G.nodes[iter_node]["Xval"])).decode('utf-8'),
+            "yval": base64.b64encode(pickle.dumps(G.nodes[iter_node]["yval"])).decode('utf-8'),
         }
-
         configmap_name = f"node-configmap-{iter_node}"
 
         # Create or update ConfigMap
@@ -100,13 +100,50 @@ def init_attributes():
 
         # Update the Kubernetes pod with the new attributes
         update_pod_attributes(pod_name, configmap_name)
-        print(f"ConfigMap {configmap_name} created/updated successfully.")\
+        print(f"ConfigMap {configmap_name} created/updated successfully.")
 
         # Store pod attributes
         pod_info[pod_name] = {"coords": node_features, "Xtrain": np.array(configmap_data["Xtrain"]), "ytrain": np.array(configmap_data["ytrain"]), "Xval": np.array(configmap_data["Xval"]), "yval": np.array(configmap_data["yval"])}
+        print("CP1", pod_info)
     
-    return pod_info
+    #return pod_info
 
+
+def get_pods_attributes(label_selector="app=fedrelax-client", namespace="fed-relax"):
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
+
+    attributes = {}
+    pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
+
+    for pod in pods.items:
+        # Get the ConfigMap name associated with the pod
+        configmap_name = pod.metadata.labels.get("configmap-name")
+
+        if not configmap_name:
+            print(f"Warning: Pod {pod.metadata.name} doesn't have a configmap-name label.")
+            continue
+
+        # Get the ConfigMap data
+        try:
+            configmap = v1.read_namespaced_config_map(name=configmap_name, namespace=namespace)
+        except client.rest.ApiException as e:
+            print(f"Error retrieving ConfigMap {configmap_name} for pod {pod.metadata.name}: {e}")
+            continue
+        
+        # Extract relevant attributes from the ConfigMap data (modify as needed)
+        pod_attributes = {
+            "coords": pickle.loads(base64.b64decode(configmap.data["coords"])),
+            "Xtrain": pickle.loads(base64.b64decode(configmap.data["Xtrain"])),
+            "ytrain": pickle.loads(base64.b64decode(configmap.data["ytrain"])),
+            "Xval": pickle.loads(base64.b64decode(configmap.data["Xval"])),
+            "yval": pickle.loads(base64.b64decode(configmap.data["yval"])),
+        }
+
+        attributes[pod.metadata.name] = pod_attributes
+        print("CP2",attributes)
+
+    return attributes
 
 def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
     """
@@ -114,7 +151,7 @@ def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=1, pos='coords', r
     using k-nearest neighbors approach.
     """
     # Get pod information from Kubernetes cluster
-    # pod_info = get_pod_attributes(namespace=namespace)
+    # pod_info = get_podsßß_attributes(namespace=namespace)
     
     # Initialize empty graph
     graph = nx.Graph()
@@ -243,7 +280,8 @@ def PlotFinalGraph(graphin, pos='coord', annotate='name'):
 
 
 # Initialize pod attributes
-pod_info = init_attributes()
+init_attributes()
+pod_info = get_pods_attributes()
 
 # Filter the graph to include only the first three nodes
 subgraph_nodes = list(G.nodes())[:3]
