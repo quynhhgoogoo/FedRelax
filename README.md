@@ -1,9 +1,3 @@
-# FedRelax
-Decentralized Federated Learning with Kubernetes Orchestration
+# Scalable Federated Machine Learning with FedRelax on Kubernetes
 
-## Implementation updates
-- Identifies the IP addresses of pods in a specified namespace.
-- Establishes communication between these pods using sockets.
-- Loads and processes data locally in each pod.
-- Applies the FedRelax algorithm for model updates.
-- Evaluates the local models' performance
+This project implements the FedRelax algorithm for scalable Federated Machine Learning on a Kubernetes cluster. It enables distributed training on client datasets while preserving data privacy.
