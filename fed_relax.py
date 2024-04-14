@@ -151,7 +151,7 @@ def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=1, pos='coords', r
     using k-nearest neighbors approach.
     """
     # Get pod information from Kubernetes cluster
-    # pod_info = get_podsßß_attributes(namespace=namespace)
+    # pod_info = get_pods_attributes(namespace=namespace)
     
     # Initialize empty graph
     graph = nx.Graph()
@@ -284,22 +284,22 @@ init_attributes()
 pod_info = get_pods_attributes()
 
 # Filter the graph to include only the first three nodes
-subgraph_nodes = list(G.nodes())[:3]
-subgraph = G.subgraph(subgraph_nodes).copy()
+# subgraph_nodes = list(G.nodes())[:3]
+# subgraph = G.subgraph(subgraph_nodes).copy()
 
 # Call the visualization function before adding edges
-visualize_and_save_graph(subgraph, '/app/init_graph.png')
+visualize_and_save_graph(G, '/app/init_graph.png')
 
 # Add edges based on the pod coordinates
 updated_graph = add_edges_k8s(pod_info)
 print("Update graph", updated_graph.nodes())
-i = 'client-f44c98887-jw7wx'
-#for iter_node in G.nodes(): 
+# i = 'client-f44c98887-jw7wx'
+# for iter_node in G.nodes(): 
 #    print(G.nodes[iter_node])
-print("Attributes of graphs after update")
-print((np.array(updated_graph.nodes[i]["Xtrain"])).shape)
-print((np.array(updated_graph.nodes[i]["ytrain"])).shape)
-print((np.array(updated_graph.nodes[i]["coords"])).shape)
+# print("Attributes of graphs after update")
+# print((np.array(updated_graph.nodes[i]["Xtrain"])).shape)
+# print((np.array(updated_graph.nodes[i]["ytrain"])).shape)
+# print((np.array(updated_graph.nodes[i]["coords"])).shape)
 
 # Call the visualization function after adding edges
 visualize_and_save_graph(updated_graph, '/app/after_graph.png')

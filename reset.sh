@@ -3,6 +3,8 @@
 # minikube start
 
 # Amateur clean
+# docker system prune -a 
+# sudo docker image pull python:3.9  
 kubectl delete ns fed-relax
 kubectl create ns fed-relax
 docker images
@@ -41,6 +43,12 @@ kubectl apply -f service.yaml
 kubectl apply -f deployment.yaml 
 kubectl get pods -n fed-relax
 kubectl config set-context --current --namespace=fed-relax
+
+# Add metric server
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+minikube addons enable metrics-server
+# minikube dashboard
+# kubectl top node
 
 # kubectl get pod pod1 -n fed-relax -o=jsonpath='{.status.containerStatuses[*].state.terminated.exitCode}'
 

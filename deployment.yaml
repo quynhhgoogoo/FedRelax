@@ -18,7 +18,7 @@ spec:
       containers:
       - name: fedrelax-container-server
         image: quynhhgoogoo/fed-relax-server:latest
-        command: ["python3", "-u", "/app/server/send.py"]
+        command: ["python3", "-u", "/app/server/test.py"]
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -33,7 +33,7 @@ metadata:
   name: client
   namespace: fed-relax
 spec:
-  replicas: 3
+  replicas: 20
   selector:
     matchLabels:
       app: fedrelax-client
@@ -47,7 +47,7 @@ spec:
       containers:
       - name: fedrelax-container-client
         image: quynhhgoogoo/fed-relax-client:latest
-        command: ["python3", "-u", "/app/client/receive.py"]
+        command: ["python3", "-u", "/app/client/test.py"]
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

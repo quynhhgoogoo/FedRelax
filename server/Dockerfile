@@ -7,7 +7,8 @@ COPY . /app
 
 # RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install Flask numpy scikit-learn matplotlib kubernetes networkx
-RUN apt-get update && apt-get install -y iputils-ping \ 
+RUN apt-get update --allow-unauthenticated \
+    && apt-get install -y iputils-ping \ 
     && apt-get install -y net-tools \
     && apt-get install -y dnsutils  \
     && apt-get install -y vim \
@@ -17,4 +18,4 @@ RUN apt-get update && apt-get install -y iputils-ping \
 EXPOSE 8000
 
 
-CMD ["python", "/server/send.py"]
+CMD ["python", "/server/test.py"]
