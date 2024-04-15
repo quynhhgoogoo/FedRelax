@@ -1,5 +1,5 @@
 from kubernetes import client, config
-from flask import Flask, request, jsonify
+import socket
 import pickle
 import numpy as np
 import base64
@@ -7,8 +7,6 @@ import base64
 # Initialize variables to store received predictions and node attributes
 all_predictions = []
 node_attributes = {}
-
-app = Flask(__name__)
 
 def get_node_attributes(pod_selector="app=fedrelax-client", namespace="fed-relax"):
     config.load_incluster_config()
@@ -38,7 +36,31 @@ def get_node_attributes(pod_selector="app=fedrelax-client", namespace="fed-relax
 
     return node_attributes
 
-@app.route("/predictions", methods=["POST"])
-def receive_predictions():
-    data = request.get_json()
-    predictions = np.array(data["predictions"])
+# Set up socket server
+SRV = socket.gethostbyname(socket.gethostname())  # Get pod's IP address
+PORT = 3000
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server_socket.bind((SRV, PORT))
+server_socket.listen()
+print(f'Listening for connections on {SRV}:{PORT}...')
+
+def receive_predictions(client_socket):
+    try:
+        message_header = client_socket.recv(4)
+        if not len(message_header):
+            return False
+        message_length = int.from_bytes(message_header, byteorder='big')
+        return client_socket.recv(message_length)
+    except:
+        return False
+
+while True:
+    client_socket, _ = server_socket.accept()
+    predictions_data = receive_predictions(client_socket)
+    if predictions_data:
+        predictions = pickle.loads(predictions_data)
+        all_predictions.append(predictions)
+        print("Received predictions:", predictions)
+    else:
+        client_socket.close()

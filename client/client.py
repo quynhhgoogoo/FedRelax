@@ -1,13 +1,20 @@
-from kubernetes import client, config
+import os
+import socket
 import pickle
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
-import requests
+import sys
+import base64
+from kubernetes import client, config
 
 def get_pod_name():
-    config.load_incluster_config()
-    v1 = client.CoreV1Api()
-    pod_name = v1.read_namespaced_pod(name="", namespace="fed-relax").metadata.name
+    # Get the pod name from the environment variable
+    pod_name = os.environ.get('POD_NAME')
+
+    if pod_name:
+        print("Pod name:", pod_name)
+    else:
+        print("Pod name not found.")
     return pod_name
 
 def get_configmap_data(pod_name, configmap_name, namespace="fed-relax"):
@@ -24,29 +31,34 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     model.fit(Xtrain, ytrain)
     return model
 
-def send_predictions_to_server(predictions, service_name="fedrelax-server", namespace="fed-relax"):
-    # Use service discovery to find the server pod IP
-    v1 = client.AppsV1Api()
+def send_predictions_to_server(predictions, peer_ip, port=3000):
+    # Establish connection to the server using socket
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        service = v1.read_namespaced_service(name=service_name, namespace=namespace)
-        server_ip = service.spec.cluster_ip  # Get cluster IP of the service
-    except client.rest.ApiException as e:
-        print(f"Error retrieving service {service_name}: {e}")
+        client_socket.connect((peer_ip, port))
+    except Exception as e:
+        print(f"Error connecting to server: {e}")
         return
+    
+    try:
+        # Send predictions data
+        message = pickle.dumps(predictions)
+        client_socket.send(message)
 
-    # Send predictions to the server using a library like requests for a REST API
-    url = f"http://{server_ip}:3000/predictions"  
-    data = {"predictions": predictions.tolist()} 
-    response = requests.post(url, json=data)
-
-    if response.status_code == 200:
-        print("Predictions sent successfully!")
-    else:
-        print(f"Error sending predictions: {response.text}")
+        # Receive acknowledgment from server
+        ack = client_socket.recv(1024)
+        print("Server acknowledgment:", ack.decode('utf-8'))
+    except Exception as e:
+        print(f"Error sending predictions to server: {e}")
+    finally:
+        # Close the socket connection
+        client_socket.close()
 
 # Load data and attributes from ConfigMap
 pod_name = get_pod_name()
-configmap_name = f"node-configmap-{pod_name.split('-')[-1]}"  # Extract node ID from pod name
+print(pod_name)
+pod_hash = pod_name[:-4]
+configmap_name = f"node-configmap-{pod_hash}"
 configmap_data = get_configmap_data(pod_name, configmap_name)
 
 if configmap_data:
@@ -60,7 +72,10 @@ if configmap_data:
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
     predictions = local_model.predict(Xtest)
 
+    # Get peer pod's IP address
+    pod_ip = socket.gethostbyname(socket.gethostname())
+
     # Send predictions to the server for aggregation
-    send_predictions_to_server(predictions)
+    send_predictions_to_server(predictions, pod_ip)
 else:
     print("Error: ConfigMap data not found.")

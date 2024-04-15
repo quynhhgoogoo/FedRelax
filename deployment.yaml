@@ -47,6 +47,11 @@ spec:
       containers:
       - name: fedrelax-container-client
         image: quynhhgoogoo/fed-relax-client:latest
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         command: ["python3", "-u", "/app/client/test.py"]
         imagePullPolicy: Always
         ports:
