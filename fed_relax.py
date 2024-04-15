@@ -315,7 +315,7 @@ print("runtime of FedRelax ", end - st)
 
 # Compute node-wise train and val errors
 for iter_node in final_graph.nodes():
-    if "model" in final_graph.nodes[iter_node]:  # Check if 'model' exists in the node attributes
+    if "model" in final_graph.nodes[iter_node]:
         trained_local_model = final_graph.nodes[iter_node]["model"]
         train_features = final_graph.nodes[iter_node]["Xtrain"]
         train_labels = final_graph.nodes[iter_node]["ytrain"]
@@ -332,8 +332,8 @@ for iter_node in final_graph.nodes():
         print(f"Warning: 'model' attribute not found for node {iter_node}")
 
 
-print("average train error :",sum(nx.get_node_attributes(G, "trainerr").values())/len(G.nodes()))
-print("average val error :",sum(nx.get_node_attributes(G, "valerr").values())/len(G.nodes()))
+print("average train error :",sum(nx.get_node_attributes(final_graph, "trainerr").values())/len(final_graph.nodes()))
+print("average val error :",sum(nx.get_node_attributes(final_graph, "valerr").values())/len(final_graph.nodes()))
 
 pod_to_int = {}
 for i, pod in enumerate(pod_info):

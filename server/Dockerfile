@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . /app
 
 # RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install Flask numpy scikit-learn matplotlib kubernetes networkx
+RUN pip install Flask numpy scikit-learn matplotlib kubernetes networkx Flask
 RUN apt-get update --allow-unauthenticated \
     && apt-get install -y iputils-ping \ 
     && apt-get install -y net-tools \
@@ -18,4 +18,4 @@ RUN apt-get update --allow-unauthenticated \
 EXPOSE 8000
 
 
-CMD ["python", "/server/test.py"]
+CMD ["python", "/server/server.py"]
