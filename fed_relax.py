@@ -145,7 +145,7 @@ def get_pods_attributes(label_selector="app=fedrelax-client", namespace="fed-rel
 
     return attributes
 
-def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
+def add_edges_k8s(pod_info,namespace="fed-relax", nrneighbors=3, pos='coords', refdistance=1):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -293,13 +293,6 @@ visualize_and_save_graph(G, '/app/init_graph.png')
 # Add edges based on the pod coordinates
 updated_graph = add_edges_k8s(pod_info)
 print("Update graph", updated_graph.nodes())
-# i = 'client-f44c98887-jw7wx'
-# for iter_node in G.nodes(): 
-#    print(G.nodes[iter_node])
-# print("Attributes of graphs after update")
-# print((np.array(updated_graph.nodes[i]["Xtrain"])).shape)
-# print((np.array(updated_graph.nodes[i]["ytrain"])).shape)
-# print((np.array(updated_graph.nodes[i]["coords"])).shape)
 
 # Call the visualization function after adding edges
 visualize_and_save_graph(updated_graph, '/app/after_graph.png')
@@ -346,15 +339,14 @@ pod_to_int = {}
 for i, pod in enumerate(pod_info):
     pod_to_int[i] = pod
 X_val = final_graph.nodes[pod_to_int[0]]["Xval"]
-y_1 = final_graph.nodes[pod_to_int[1]]["model"].predict(X_val)
-y_2 = final_graph.nodes[pod_to_int[2]]["model"].predict(X_val)
+y_1 = final_graph.nodes[pod_to_int[11]]["model"].predict(X_val)
+y_2 = final_graph.nodes[pod_to_int[5]]["model"].predict(X_val)
 
 # Plot the results
-# TODO: Current phase is for testing purposes only, need to update this later
 plt.figure()
 plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
 plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-plt.plot(final_graph.nodes[pod_to_int[1]]["Xval"], final_graph.nodes[pod_to_int[0]]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-plt.plot(final_graph.nodes[pod_to_int[2]]["Xval"], final_graph.nodes[pod_to_int[1]]["yval"], color="red", label="val data second cluster", linewidth=2)
+plt.plot(final_graph.nodes[pod_to_int[7]]["Xval"], final_graph.nodes[pod_to_int[0]]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+plt.plot(final_graph.nodes[pod_to_int[15]]["Xval"], final_graph.nodes[pod_to_int[11]]["yval"], color="red", label="val data second cluster", linewidth=2)
 plt.savefig('/app/validation.png')  # Save the image to a file
 print(f"Validation graph is successfully saved in /app/validation.png")
