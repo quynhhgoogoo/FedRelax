@@ -4,8 +4,6 @@ import pickle
 import numpy as np
 import base64
 
-# Initialize variables to store received predictions and node attributes
-all_predictions = []
 node_attributes = {}
 
 def get_node_attributes(pod_selector="app=fedrelax-client", namespace="fed-relax"):
@@ -51,16 +49,28 @@ def receive_predictions(client_socket):
         if not len(message_header):
             return False
         message_length = int.from_bytes(message_header, byteorder='big')
-        return client_socket.recv(message_length)
+        data = client_socket.recv(message_length)
+        return data
     except:
         return False
+
+# Initialize variables to store received predictions and node attributes
+all_predictions = []
+node_attributes = get_node_attributes()
 
 while True:
     client_socket, _ = server_socket.accept()
     predictions_data = receive_predictions(client_socket)
     if predictions_data:
-        predictions = pickle.loads(predictions_data)
-        all_predictions.append(predictions)
-        print("Received predictions:", predictions)
+        # Basic check for base64 format (without external library)
+        if len(predictions_data) % 4 == 0 and all(char in base64.b64alphabet or char in base64.urlsafe_b64alphabet for char in predictions_data.decode()):
+            try:
+                predictions = pickle.loads(base64.b64decode(predictions_data))
+                all_predictions.append(predictions)
+                print("Received predictions:", predictions)
+            except pickle.UnpicklingError as e:
+                print("Error while unpickling predictions data:", e)
+        else:
+            print("Received invalid data format (likely not base64 encoded).")
     else:
         client_socket.close()
