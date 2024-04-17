@@ -45,12 +45,12 @@ print(f'Listening for connections on {SRV}:{PORT}...')
 
 def receive_predictions(client_socket):
     try:
-        message_header = client_socket.recv(4)
+        message_header = client_socket.recv(2)
         if not len(message_header):
             return False
         message_length = int.from_bytes(message_header, byteorder='big')
         data = client_socket.recv(message_length)
-        return data
+        return data.decode()
     except:
         return False
 
@@ -62,15 +62,17 @@ while True:
     client_socket, _ = server_socket.accept()
     predictions_data = receive_predictions(client_socket)
     if predictions_data:
-        # Basic check for base64 format (without external library)
-        if len(predictions_data) % 4 == 0 and all(char in base64.b64alphabet or char in base64.urlsafe_b64alphabet for char in predictions_data.decode()):
-            try:
-                predictions = pickle.loads(base64.b64decode(predictions_data))
-                all_predictions.append(predictions)
-                print("Received predictions:", predictions)
-            except pickle.UnpicklingError as e:
-                print("Error while unpickling predictions data:", e)
-        else:
-            print("Received invalid data format (likely not base64 encoded).")
+        try:
+            print("Received data:", predictions_data)
+            predictions = pickle.loads(predictions_data)
+            all_predictions.append(predictions)
+            print("Received predictions:", predictions)
+        except pickle.UnpicklingError as e:
+            print("Error while unpickling predictions data:", e)
+            # Consider printing decoded data for further debugging
+        except base64.binascii.Error as e:
+            print("Error while decoding predictions data:", e)
+        except Exception as e:
+            print("An unexpected error occurred:", e)
     else:
         client_socket.close()

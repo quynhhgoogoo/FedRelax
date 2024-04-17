@@ -6,6 +6,7 @@ from sklearn.tree import DecisionTreeRegressor
 import sys
 import base64
 import random
+import json
 from kubernetes import client, config
 
 def get_pod_name():
@@ -68,9 +69,10 @@ def send_predictions_to_server(predictions, peer_ip, port=3000):
         return
     
     try:
-        # Send predictions data
-        message = pickle.dumps(predictions)
-        client_socket.send(message)
+        # Convert predictions data to JSON
+        message = json.dumps(predictions.tolist())
+        client_socket.send(message.encode())
+        print("Predictions sent", message)
 
         # Receive acknowledgment from server
         ack = client_socket.recv(1024)
@@ -128,6 +130,7 @@ if configmap_data:
     pod_ip = get_random_server_pod_ip()
 
     # Send predictions to the server for aggregation
+    print("Predictions from model", predictions)
     send_predictions_to_server(predictions, pod_ip)
 else:
     print("Error: ConfigMap data not found.")
