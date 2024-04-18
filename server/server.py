@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
+import datetime
 
 # Define a class to represent a node in the FedRelax graph
 class Node:
@@ -11,7 +12,7 @@ class Node:
         self.name = pod_name
         self.attributes = attributes
         self.model = None  # Initialize local model
-        self.update = None  # Store received client update (model parameters, etc.)
+        self.update = None  # Store received client update
 
 
 # Function to receive data from a client socket
@@ -32,8 +33,7 @@ def aggregate_updates(Xtest, client_updates):
     # TODO: Implement your aggregation logic
     all_weights = np.concatenate([update['sample_weight'] for update in client_updates])
     all_predictions = np.concatenate([update['model'].predict(Xtest) for update in client_updates])
-    average_model = DecisionTreeRegressor().fit(Xtest, 
-                                                   np.average(all_predictions, weights=all_weights, axis=0))
+    average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions, weights=all_weights, axis=0))
     return average_model
 
 
@@ -48,21 +48,20 @@ def main():
     server_socket.listen()
     print(f'Listening for connections on {HOST}:{PORT}...')
 
-    # Initialize empty graph (dictionary to store nodes)
+    # Initialize empty graph
     graph = defaultdict(Node)
 
-    # Global model and test data (replace with your actual setup)
+    # Global model and test data
     global_model = None
-    Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)  # Example test set (replace with actual data)
-
-    desired_num_clients = 3  # Replace with actual number of clients
+    Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1) 
+    desired_num_clients = 3
 
     while True:
         client_socket, _ = server_socket.accept()
         data = receive_data(client_socket)
         if data:
             try:
-                # Receive client update (including pod info and model parameters)
+                # Receive client update: pod info, model parameters
                 client_update = json.loads(data)
                 pod_name = client_update['pod_name']
                 print(f"Received update from pod: {pod_name}")
@@ -72,11 +71,11 @@ def main():
                     graph[pod_name] = Node(pod_name, client_update['attributes'])
                 graph[pod_name].update = client_update
 
-                # Send acknowledgment message to the client
-                ack_message = json.dumps({"message": "Model update received"}).encode()
+                # Send a simple acknowledgment message to the client
+                ack_message = json.dumps({"message": "Update received"}).encode()
                 client_socket.sendall(ack_message)
 
-                # Log information about received update
+                # Log information about received update with timestamp
                 with open("server_logs.txt", "a") as log_file:
                     log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
 
