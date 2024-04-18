@@ -1,0 +1,12 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-attributes-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: client-container
+        image: quynhhgoogoo/fed-relax-client:latest
+        command: ["python3", "-u", "/app/init_attributes.py"]
+      restartPolicy: OnFailure
