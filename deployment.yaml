@@ -44,10 +44,6 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: my-service-account
-      initContainers:
-      - name: init-attributes-job
-        image: quynhhgoogoo/fed-relax-client:latest
-        command: ["sh", "-c", "kubectl apply -f init_job.yaml"]
       containers:
       - name: fedrelax-container-client
         image: quynhhgoogoo/fed-relax-client:latest

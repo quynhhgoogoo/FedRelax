@@ -18,4 +18,4 @@ RUN apt-get update --allow-unauthenticated \
 EXPOSE 8000
 
 
-CMD ["python", "/server/server.py"]
+CMD ["python", "/server/test.py"]

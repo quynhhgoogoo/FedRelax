@@ -7,7 +7,26 @@ import sys
 import base64
 import random
 import json
+import time
+import subprocess
 from kubernetes import client, config
+
+def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
+    config.load_incluster_config()  # Load incluster config if running inside a pod
+    api_instance = client.BatchV1Api()
+    try:
+        job = api_instance.read_namespaced_job(job_name, namespace)
+        if job.status.succeeded is not None and job.status.succeeded > 0:
+            return True
+    except Exception as e:
+        print(f"Error checking job status: {str(e)}")
+    return False
+
+def wait_for_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
+    while not check_job_completion(job_name, namespace):
+        print(f"Waiting for Job {job_name} to complete...")
+        time.sleep(10)
+    print(f"Job {job_name} completed successfully!")
 
 def get_pod_name():
     # Get the pod name from the environment variable
@@ -18,6 +37,7 @@ def get_pod_name():
     else:
         print("Pod name not found.")
     return pod_name
+
 
 def get_configmap_data(pod_name, namespace="fed-relax"):
     config.load_incluster_config()
@@ -54,10 +74,12 @@ def get_configmap_data(pod_name, namespace="fed-relax"):
 
     return pod_attributes
 
+
 def train_local_model(Xtrain, ytrain, max_depth=4):
     model = DecisionTreeRegressor(max_depth=max_depth)
     model.fit(Xtrain, ytrain)
     return model
+
 
 def send_predictions_to_server(predictions, peer_ip, port=3000):
     # Establish connection to the server using socket
@@ -86,6 +108,8 @@ def send_predictions_to_server(predictions, peer_ip, port=3000):
     finally:
         # Close the socket connection
         client_socket.close()
+
+
 def get_random_server_pod_ip(namespace="fed-relax"):
     config.load_incluster_config()
     v1 = client.CoreV1Api()
@@ -110,6 +134,8 @@ def get_random_server_pod_ip(namespace="fed-relax"):
     
     return pod_ip
 
+
+wait_for_job_completion()
 # Load data and attributes from ConfigMap
 pod_name = get_pod_name()
 print(pod_name)

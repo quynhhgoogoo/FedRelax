@@ -14,4 +14,4 @@ RUN apt-get update && apt-get install -y iputils-ping \
     && apt-get install -y iptables && rm -rf /var/lib/apt/lists/*
 
 
-CMD ["python", "/client/client.py"]
+CMD ["python", "/client/test.py"]

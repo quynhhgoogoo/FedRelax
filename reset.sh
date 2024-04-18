@@ -1,5 +1,6 @@
 # Restart minikube
 # minikube stop
+# minikube ssh -- docker system prune
 # minikube start
 
 # Amateur clean
