@@ -71,8 +71,12 @@ def send_predictions_to_server(predictions, peer_ip, port=3000):
     try:
         # Convert predictions data to JSON
         message = json.dumps(predictions.tolist())
-        client_socket.send(message.encode())
-        print("Predictions sent", message)
+        # Add message header: length of message as 2-byte big-endian integer
+        message_header = len(message).to_bytes(2, byteorder='big')
+        message_with_header = message_header + message.encode()
+
+        client_socket.send(message_with_header)
+        print("Predictions sent", predictions, type(predictions))
 
         # Receive acknowledgment from server
         ack = client_socket.recv(1024)
@@ -82,7 +86,6 @@ def send_predictions_to_server(predictions, peer_ip, port=3000):
     finally:
         # Close the socket connection
         client_socket.close()
-
 def get_random_server_pod_ip(namespace="fed-relax"):
     config.load_incluster_config()
     v1 = client.CoreV1Api()
@@ -130,7 +133,7 @@ if configmap_data:
     pod_ip = get_random_server_pod_ip()
 
     # Send predictions to the server for aggregation
-    print("Predictions from model", predictions)
+    print("Predictions from model", predictions, type(predictions))
     send_predictions_to_server(predictions, pod_ip)
 else:
     print("Error: ConfigMap data not found.")

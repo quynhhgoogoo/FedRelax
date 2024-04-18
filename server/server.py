@@ -63,7 +63,7 @@ while True:
     predictions_data = receive_predictions(client_socket)
     if predictions_data:
         try:
-            print("Received data:", predictions_data)
+            print("Received data:", predictions_data, type(predictions_data))
             predictions = pickle.loads(predictions_data)
             all_predictions.append(predictions)
             print("Received predictions:", predictions)
