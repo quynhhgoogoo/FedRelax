@@ -11,6 +11,7 @@ import time
 import subprocess
 from kubernetes import client, config
 
+
 def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
     config.load_incluster_config()  # Load incluster config if running inside a pod
     api_instance = client.BatchV1Api()
@@ -22,11 +23,13 @@ def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
         print(f"Error checking job status: {str(e)}")
     return False
 
+
 def wait_for_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
     while not check_job_completion(job_name, namespace):
         print(f"Waiting for Job {job_name} to complete...")
         time.sleep(10)
     print(f"Job {job_name} completed successfully!")
+
 
 def get_pod_name():
     # Get the pod name from the environment variable
@@ -57,8 +60,8 @@ def get_configmap_data(pod_name, namespace="fed-relax"):
     except client.rest.ApiException as e:
         print(f"Error retrieving ConfigMap {configmap_name} for pod {pod_name}: {e}")
         return None
-    
-    # Extract relevant attributes from the ConfigMap data
+
+    # Extract relevant attributes and training data
     pod_attributes = {
         "coords": pickle.loads(base64.b64decode(configmap.data["coords"])),
         "Xtrain": pickle.loads(base64.b64decode(configmap.data["Xtrain"])),
@@ -81,7 +84,7 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     return model
 
 
-def send_predictions_to_server(predictions, peer_ip, port=3000):
+def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, peer_ip, port=3000):
     # Establish connection to the server using socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -89,22 +92,42 @@ def send_predictions_to_server(predictions, peer_ip, port=3000):
     except Exception as e:
         print(f"Error connecting to server: {e}")
         return
-    
+
     try:
-        # Convert predictions data to JSON
-        message = json.dumps(predictions.tolist())
+        model_params_encoded = pickle.dumps(model_params)
+        model_params_encoded_str = base64.b64encode(model_params_encoded).decode('utf-8')
+        Xtrain_encoded_str = base64.b64encode(pickle.dumps(Xtrain)).decode('utf-8')
+        ytrain_encoded_str = base64.b64encode(pickle.dumps(ytrain)).decode('utf-8')
+
+        if isinstance(sample_weight, np.ndarray):
+            # Convert sample_weight to a list
+            sample_weight_list = sample_weight.tolist()
+        else:
+            # No conversion needed if it's already a list
+            sample_weight_list = sample_weight
+
+        # Create a dictionary containing model parameters, training data, and sample weights
+        client_update = {
+            "pod_name": get_pod_name(),
+            "attributes": None,  # Can include additional attributes if needed
+            "model_params": model_params_encoded_str,
+            "Xtrain": Xtrain_encoded_str,
+            "ytrain": ytrain_encoded_str,
+            "sample_weight": sample_weight_list,  # Use the converted list
+        }
+
         # Add message header: length of message as 2-byte big-endian integer
-        message_header = len(message).to_bytes(2, byteorder='big')
-        message_with_header = message_header + message.encode()
+        message_header = len(json.dumps(client_update)).to_bytes(2, byteorder='big')
+        message_with_header = message_header + json.dumps(client_update).encode()
 
         client_socket.send(message_with_header)
-        print("Predictions sent", predictions, type(predictions))
+        print("Model update sent to server")
 
-        # Receive acknowledgment from server
+        # Receive acknowledgment from server (optional)
         ack = client_socket.recv(1024)
         print("Server acknowledgment:", ack.decode('utf-8'))
     except Exception as e:
-        print(f"Error sending predictions to server: {e}")
+        print(f"Error sending model update to server: {e}")
     finally:
         # Close the socket connection
         client_socket.close()
@@ -134,32 +157,29 @@ def get_random_server_pod_ip(namespace="fed-relax"):
     
     return pod_ip
 
-
+    
+# Wait for job completion (initialization job in this example)
 wait_for_job_completion()
-# Load data and attributes from ConfigMap
-pod_name = get_pod_name()
-print(pod_name)
-pod_hash = pod_name[:-4]
-configmap_name = f"node-configmap-{pod_hash}"
-configmap_data = get_configmap_data(pod_name)
-print("Config Map data: ", configmap_data)
 
+# Get pod name and ConfigMap data
+pod_name = get_pod_name()
+configmap_data = get_configmap_data(pod_name)
+
+# Train local model if data is available
 if configmap_data:
     Xtrain = configmap_data["Xtrain"]
     ytrain = configmap_data["ytrain"]
 
-    # Train local model
+    # Train a local model (replace with your actual model training)
     local_model = train_local_model(Xtrain, ytrain)
 
-    # Generate predictions on a test set (replace with actual test set generation)
-    Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
-    predictions = local_model.predict(Xtest)
+    # Get sample weights (e.g., set equal weights for all data points)
+    sample_weight = np.ones(len(Xtrain))
 
-    # Get peer pod's IP address
-    pod_ip = get_random_server_pod_ip()
+    # Get server pod IP address (you can use service discovery mechanisms)
+    server_ip = get_random_server_pod_ip(namespace="fed-relax")
 
-    # Send predictions to the server for aggregation
-    print("Predictions from model", predictions, type(predictions))
-    send_predictions_to_server(predictions, pod_ip)
+    # Send model update to the server
+    send_model_update_to_server(local_model, Xtrain, ytrain, sample_weight, server_ip)
 else:
     print("Error: ConfigMap data not found.")
