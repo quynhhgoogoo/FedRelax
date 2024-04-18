@@ -3,6 +3,7 @@ import socket
 import pickle
 import numpy as np
 import base64
+import json
 
 node_attributes = {}
 
@@ -63,16 +64,12 @@ while True:
     predictions_data = receive_predictions(client_socket)
     if predictions_data:
         try:
-            print("Received data:", predictions_data, type(predictions_data))
-            predictions = pickle.loads(predictions_data)
+            print("Received data:", predictions_data)
+            # Convert the JSON string to a list of predictions
+            predictions = json.loads(predictions_data)
             all_predictions.append(predictions)
             print("Received predictions:", predictions)
-        except pickle.UnpicklingError as e:
-            print("Error while unpickling predictions data:", e)
-            # Consider printing decoded data for further debugging
-        except base64.binascii.Error as e:
-            print("Error while decoding predictions data:", e)
         except Exception as e:
-            print("An unexpected error occurred:", e)
+            print("Error processing predictions:", e)
     else:
         client_socket.close()
