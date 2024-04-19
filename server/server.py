@@ -30,7 +30,7 @@ def receive_data(client_socket):
 
 # Function to aggregate model updates from clients
 def aggregate_updates(Xtest, client_updates):
-    # TODO: Implement your aggregation logic
+    # TODO: Implement aggregation logic
     all_weights = np.concatenate([update['sample_weight'] for update in client_updates])
     all_predictions = np.concatenate([update['model'].predict(Xtest) for update in client_updates])
     average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions, weights=all_weights, axis=0))
