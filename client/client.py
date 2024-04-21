@@ -109,10 +109,7 @@ def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, pee
         # Create a dictionary containing model parameters, training data, and sample weights
         client_update = {
             "pod_name": get_pod_name(),
-            "attributes": None,  # Can include additional attributes if needed
             "model_params": model_params_encoded_str,
-            "Xtrain": Xtrain_encoded_str,
-            "ytrain": ytrain_encoded_str,
             "sample_weight": sample_weight_list,  # Use the converted list
         }
 
@@ -123,16 +120,21 @@ def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, pee
         client_socket.send(message_with_header)
         print("Model update sent to server")
 
-        # Receive acknowledgment from server (optional)
+        # Receive acknowledgment from server
         ack = client_socket.recv(1024)
         print("Server acknowledgment:", ack.decode('utf-8'))
+
+        # Close the socket connection after receiving acknowledgment
+        client_socket.close()
+        print("Connection closed after receiving acknowledgment from server")
     except Exception as e:
         print(f"Error sending model update to server: {e}")
-    finally:
-        # Close the socket connection
+        # Close the socket connection in case of an error
         client_socket.close()
+        print("Connection closed due to error")
 
 
+# TODO: Should be replaced by load balancer (Optional)
 def get_random_server_pod_ip(namespace="fed-relax"):
     config.load_incluster_config()
     v1 = client.CoreV1Api()

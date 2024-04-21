@@ -5,14 +5,19 @@ from collections import defaultdict
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
 import datetime
+from kubernetes import client, config
+import networkx as nx
+import matplotlib.pyplot as plt
+from sklearn.neighbors import kneighbors_graph
+import base64
+import pickle
 
 # Define a class to represent a node in the FedRelax graph
 class Node:
-    def __init__(self, pod_name, attributes):
+    def __init__(self, pod_name, model, weight):
         self.name = pod_name
-        self.attributes = attributes
         self.model = None  # Initialize local model
-        self.update = None  # Store received client update
+        self.weight = None  # Store received client update
 
 
 # Function to receive data from a client socket
@@ -26,7 +31,7 @@ def receive_data(client_socket):
         return data.decode()
     except:
         return False
-
+        
 
 # Function to aggregate model updates from clients
 def aggregate_updates(Xtest, client_updates):
@@ -36,6 +41,10 @@ def aggregate_updates(Xtest, client_updates):
     average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions, weights=all_weights, axis=0))
     return average_model
 
+def decode_and_unpickle(encoded_data):
+    decoded_data = base64.b64decode(encoded_data)
+    unpickled_data = pickle.loads(decoded_data)
+    return unpickled_data
 
 # Server-side script for FedRelax on Kubernetes
 def main():
@@ -54,6 +63,7 @@ def main():
     # Global model and test data
     global_model = None
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1) 
+    # TODO: Replace by the number of nodes inside graph
     desired_num_clients = 3
 
     while True:
@@ -64,11 +74,15 @@ def main():
                 # Receive client update: pod info, model parameters
                 client_update = json.loads(data)
                 pod_name = client_update['pod_name']
-                print(f"Received update from pod: {pod_name}")
+
+                # Decode model parameters, Xtrain, and ytrain
+                model_params = decode_and_unpickle(client_update['model_params'])
+                sample_weight = client_update['sample_weight']  # No need to decode sample_weight
+                print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}")
 
                 # Update node information in the graph
                 if pod_name not in graph:
-                    graph[pod_name] = Node(pod_name, client_update['attributes'])
+                    graph[pod_name] = Node(pod_name, model_params, sample_weight)
                 graph[pod_name].update = client_update
 
                 # Send a simple acknowledgment message to the client
@@ -84,7 +98,6 @@ def main():
                     client_updates = [node.update for node in graph.values() if node.update is not None]
                     global_model = aggregate_updates(Xtest, client_updates)
 
-                    # Send updated global model to clients (implementation not shown here)
                     # Reset client updates for the next round
                     for node in graph.values():
                         node.update = None
