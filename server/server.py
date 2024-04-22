@@ -31,7 +31,24 @@ def receive_data(client_socket):
         return data.decode()
     except:
         return False
-        
+
+
+# Function to send global model froms server back to client
+def send_global_model_to_client(global_model, client_socket):
+    try:
+        # Encode global model using base64
+        global_model_encoded = base64.b64encode(pickle.dumps(global_model)).decode('utf-8')
+
+        # Send global model to client
+        client_socket.sendall(global_model_encoded.encode())
+        ack = client_socket.recv(1024)
+        if ack.decode('utf-8') == "ACK":
+            print("Global model acknowledgment received from client")
+        else:
+            print("Error: Failed to receive acknowledgment from client")
+    except Exception as e:
+        print(f"Error sending global model to client: {e}")
+
 
 # Function to aggregate model updates from clients
 def aggregate_updates(Xtest, client_updates):
@@ -64,7 +81,7 @@ def main():
     global_model = None
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1) 
     # TODO: Replace by the number of nodes inside graph
-    desired_num_clients = 3
+    desired_num_clients = 1
 
     while True:
         client_socket, _ = server_socket.accept()
@@ -97,6 +114,9 @@ def main():
                 if len(graph) == desired_num_clients:
                     client_updates = [node.update for node in graph.values() if node.update is not None]
                     global_model = aggregate_updates(Xtest, client_updates)
+
+                    print("Sending global model back to client")
+                    send_global_model_to_client(global_model, client_socket)
 
                     # Reset client updates for the next round
                     for node in graph.values():

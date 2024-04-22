@@ -124,14 +124,14 @@ def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, pee
         ack = client_socket.recv(1024)
         print("Server acknowledgment:", ack.decode('utf-8'))
 
-        # Close the socket connection after receiving acknowledgment
-        client_socket.close()
-        print("Connection closed after receiving acknowledgment from server")
     except Exception as e:
         print(f"Error sending model update to server: {e}")
         # Close the socket connection in case of an error
         client_socket.close()
         print("Connection closed due to error")
+    
+    finally:
+        client_socket.close()
 
 
 # TODO: Should be replaced by load balancer (Optional)
