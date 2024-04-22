@@ -52,10 +52,27 @@ def send_global_model_to_client(global_model, client_socket):
 
 # Function to aggregate model updates from clients
 def aggregate_updates(Xtest, client_updates):
-    # TODO: Implement aggregation logic
-    all_weights = np.concatenate([update['sample_weight'] for update in client_updates])
-    all_predictions = np.concatenate([update['model'].predict(Xtest) for update in client_updates])
-    average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions, weights=all_weights, axis=0))
+    # Initialize lists to store weights and predictions
+    all_weights = []
+    all_predictions = []
+    
+    # Extract weights and predictions from client updates
+    for update in client_updates:
+        all_weights.append(update['sample_weight'])
+        model = decode_and_unpickle(update['model_params'])
+        prediction = model.predict(Xtest)
+        all_predictions.append(prediction)
+    
+    # Concatenate lists of arrays into single NumPy arrays
+    all_weights_concatenated = np.concatenate(all_weights)
+    all_predictions_concatenated = np.concatenate(all_predictions)
+    
+    # Check shapes of concatenated arrays
+    print("Sample weights shape:", all_weights_concatenated.shape)
+    print("Predictions shape:", all_predictions_concatenated.shape)
+    
+    # Aggregate model updates
+    average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions_concatenated, weights=all_weights_concatenated, axis=0))
     return average_model
 
 def decode_and_unpickle(encoded_data):
