@@ -84,7 +84,7 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     return model
 
 
-def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, peer_ip, port=3000):
+def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip, port=3000):
     # Establish connection to the server using socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -98,6 +98,7 @@ def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, pee
         model_params_encoded_str = base64.b64encode(model_params_encoded).decode('utf-8')
         Xtrain_encoded_str = base64.b64encode(pickle.dumps(Xtrain)).decode('utf-8')
         ytrain_encoded_str = base64.b64encode(pickle.dumps(ytrain)).decode('utf-8')
+        coords_encoded_str = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
 
         if isinstance(sample_weight, np.ndarray):
             # Convert sample_weight to a list
@@ -109,6 +110,7 @@ def send_model_update_to_server(model_params, Xtrain, ytrain, sample_weight, pee
         # Create a dictionary containing model parameters, training data, and sample weights
         client_update = {
             "pod_name": get_pod_name(),
+            "coords": coords_encoded_str,
             "model_params": model_params_encoded_str,
             "sample_weight": sample_weight_list,  # Use the converted list
         }
@@ -171,6 +173,7 @@ configmap_data = get_configmap_data(pod_name)
 if configmap_data:
     Xtrain = configmap_data["Xtrain"]
     ytrain = configmap_data["ytrain"]
+    coords = configmap_data["coords"]
 
     # Train a local model (replace with your actual model training)
     local_model = train_local_model(Xtrain, ytrain)
@@ -182,6 +185,6 @@ if configmap_data:
     server_ip = get_random_server_pod_ip(namespace="fed-relax")
 
     # Send model update to the server
-    send_model_update_to_server(local_model, Xtrain, ytrain, sample_weight, server_ip)
+    send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight, server_ip)
 else:
     print("Error: ConfigMap data not found.")
