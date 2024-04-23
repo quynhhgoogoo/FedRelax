@@ -96,8 +96,6 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
     try:
         model_params_encoded = pickle.dumps(model_params)
         model_params_encoded_str = base64.b64encode(model_params_encoded).decode('utf-8')
-        Xtrain_encoded_str = base64.b64encode(pickle.dumps(Xtrain)).decode('utf-8')
-        ytrain_encoded_str = base64.b64encode(pickle.dumps(ytrain)).decode('utf-8')
         coords_encoded_str = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
 
         if isinstance(sample_weight, np.ndarray):

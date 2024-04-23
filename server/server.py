@@ -14,10 +14,11 @@ import pickle
 
 # Define a class to represent a node in the FedRelax graph
 class Node:
-    def __init__(self, pod_name, model, weight):
+    def __init__(self, pod_name, model, weight, coords):
         self.name = pod_name
         self.model = None  # Initialize local model
         self.weight = None  # Store received client update
+        self.coords = None
 
 
 # Function to receive data from a client socket
@@ -50,6 +51,37 @@ def send_global_model_to_client(global_model, client_socket):
         print(f"Error sending global model to client: {e}")
 
 
+def add_edges_k8s(coords,namespace="fed-relax", nrneighbors=3, pos='coords', refdistance=1):
+    """
+    Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
+    using k-nearest neighbors approach.
+    """
+    
+    # Initialize empty graph
+    graph = nx.Graph()
+    
+    # Build a numpy array containing node positions
+    node_positions = np.array([coords], dtype=float)
+    
+    # Calculate k-nearest neighbors graph
+    A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
+    
+    # Iterate over the k-nearest neighbors graph and add edges with weights
+    for i in range(len(pod_info)):
+        for j in range(len(pod_info)):
+            if A[i, j] > 0:
+                pod_name_i = list(pod_info.keys())[i]
+                pod_name_j = list(pod_info.keys())[j]
+                
+                # Calculate the Euclidean distance between pods based on their positions
+                distance = np.linalg.norm(node_positions[i] - node_positions[j])
+                
+                # Add edge with weight based on distance
+                graph.add_edge(pod_name_i, pod_name_j, weight=distance)
+    
+    return graph
+
+
 # Function to aggregate model updates from clients
 def aggregate_updates(Xtest, client_updates):
     # Initialize lists to store weights and predictions
@@ -74,6 +106,18 @@ def aggregate_updates(Xtest, client_updates):
     # Aggregate model updates
     average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions_concatenated, weights=all_weights_concatenated, axis=0))
     return average_model
+
+
+# Function to visualize the graph and save the image
+def visualize_and_save_graph(graph, output_path):
+    pos = nx.spring_layout(graph)  # Compute layout for visualization
+    plt.figure(figsize=(10, 10))
+    nx.draw(graph, pos, with_labels=True, node_size=3000, node_color='skyblue', font_size=10, font_weight='bold')
+    plt.title("Graph Visualization")
+    plt.savefig(output_path)  # Save the image to a file
+    print(f"Image is successfully saved in {output_path}")
+    plt.show()  # Display the graph
+
 
 def decode_and_unpickle(encoded_data):
     decoded_data = base64.b64decode(encoded_data)
@@ -105,18 +149,22 @@ def main():
         data = receive_data(client_socket)
         if data:
             try:
-                # Receive client update: pod info, model parameters
+                # Receive client update
                 client_update = json.loads(data)
                 pod_name = client_update['pod_name']
 
-                # Decode model parameters, Xtrain, and ytrain
+                # Decode model parameters, sample weights, coords
                 model_params = decode_and_unpickle(client_update['model_params'])
                 sample_weight = client_update['sample_weight']  # No need to decode sample_weight
-                print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}")
+                coords = decode_and_unpickle(client_update['coords'])
+                print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}, {coords}")
+
+                # Decode client updates serialized data
+                client_update['model_params'], client_update['coords'] = model_params, coords
 
                 # Update node information in the graph
                 if pod_name not in graph:
-                    graph[pod_name] = Node(pod_name, model_params, sample_weight)
+                    graph[pod_name] = Node(pod_name, model_params, sample_weight, coords)
                 graph[pod_name].update = client_update
 
                 # Send a simple acknowledgment message to the client
@@ -130,7 +178,11 @@ def main():
                 # Trigger global model update after receiving updates from all clients
                 if len(graph) == desired_num_clients:
                     client_updates = [node.update for node in graph.values() if node.update is not None]
-                    global_model = aggregate_updates(Xtest, client_updates)
+                    print(client_updates)
+                    knn_graph = add_edges_k8s(coords)
+                    visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
+                    # TODO: Modify aggregate_updates by using FedRelax
+                    # global_model = aggregate_updates(Xtest, client_updates)
 
                     print("Sending global model back to client")
                     send_global_model_to_client(global_model, client_socket)
