@@ -50,8 +50,8 @@ def send_global_model_to_client(global_model, client_socket):
     except Exception as e:
         print(f"Error sending global model to client: {e}")
 
-
-def add_edges_k8s(coords,namespace="fed-relax", nrneighbors=3, pos='coords', refdistance=1):
+#TODO: Reupdate nrneighbors to number of active pods
+def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -61,17 +61,17 @@ def add_edges_k8s(coords,namespace="fed-relax", nrneighbors=3, pos='coords', ref
     graph = nx.Graph()
     
     # Build a numpy array containing node positions
-    node_positions = np.array([coords], dtype=float)
+    node_positions = np.array([attributes["coords"] for attributes in clients_attributes], dtype=float)
     
     # Calculate k-nearest neighbors graph
     A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
     
     # Iterate over the k-nearest neighbors graph and add edges with weights
-    for i in range(len(pod_info)):
-        for j in range(len(pod_info)):
+    for i in range(len(clients_attributes)):
+        for j in range(len(clients_attributes)):
             if A[i, j] > 0:
-                pod_name_i = list(pod_info.keys())[i]
-                pod_name_j = list(pod_info.keys())[j]
+                pod_name_i = clients_attributes[i]["pod_name"]
+                pod_name_j = clients_attributes[j]["pod_name"]
                 
                 # Calculate the Euclidean distance between pods based on their positions
                 distance = np.linalg.norm(node_positions[i] - node_positions[j])
@@ -142,7 +142,7 @@ def main():
     global_model = None
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1) 
     # TODO: Replace by the number of nodes inside graph
-    desired_num_clients = 1
+    desired_num_clients = 2
 
     while True:
         client_socket, _ = server_socket.accept()
@@ -179,7 +179,7 @@ def main():
                 if len(graph) == desired_num_clients:
                     client_updates = [node.update for node in graph.values() if node.update is not None]
                     print(client_updates)
-                    knn_graph = add_edges_k8s(coords)
+                    knn_graph = add_edges_k8s(client_updates)
                     visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
                     # TODO: Modify aggregate_updates by using FedRelax
                     # global_model = aggregate_updates(Xtest, client_updates)

@@ -78,4 +78,4 @@ minikube addons enable metrics-server
 # kubectl get pods -o=jsonpath='{range .items[*]}Pod: {.metadata.name}{"\nAnnotations:\n"}{range .metadata.annotations}{.key}: {.value}{"\n"}{end}{"\n\n"}{end}'
 
 # Download image to local machine
-# kubectl cp server-6b7cd85fd6-6tq6b:/app/init_graph.png ./output/init_graph.png
+# kubectl cp server-8677d94948-w4xpf:/app/init_graph.png ./output/init_graph.png
