@@ -82,30 +82,39 @@ def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='
     return graph
 
 
-# Function to aggregate model updates from clients
-def aggregate_updates(Xtest, client_updates):
-    # Initialize lists to store weights and predictions
-    all_weights = []
-    all_predictions = []
+# Fed Relax's main function
+def FedRelax(Xtest, updated_graph, client_updates, namespace="fed-relax", regparam=0, maxiter=100):
+    # Determine the number of data points in the test set
+    testsize = Xtest.shape[0]
+    G = updated_graph
+
+    # Attach a DecisionTreeRegressor as the local model to each node in G
+    for node_i in G.nodes(data=False): 
+        print(G.nodes[node_i])
+        print(client_updates[node_i])
+        G.nodes[node_i]["model"] = client_updates[node_i]["model"]
+        G.nodes[node_i]["sample_weight"] = client_updates[node_i]["sample_weight"]  # Initialize sample weights
     
-    # Extract weights and predictions from client updates
-    for update in client_updates:
-        all_weights.append(update['sample_weight'])
-        model = decode_and_unpickle(update['model_params'])
-        prediction = model.predict(Xtest)
-        all_predictions.append(prediction)
+
+    # Iterate over all nodes in the graph
+    for node_i in G.nodes(data=False):
+        # Share predictions with neighbors
+        for node_j in G[node_i]:
+            # Add the predictions of the current hypothesis at node j as labels
+            neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
+
+            # Prepare data to be sent back to clients
+            data_to_send = {
+                "neighbourpred": neighbourpred.tolist(),
+                "Xtest": Xtest.tolist(),
+                "testsize": testsize
+            }
+
+            # Send the data back to clients
+            data_to_send_encoded = json.dumps(data_to_send).encode()
+            send_global_model_to_client(data_to_send_encoded)
     
-    # Concatenate lists of arrays into single NumPy arrays
-    all_weights_concatenated = np.concatenate(all_weights)
-    all_predictions_concatenated = np.concatenate(all_predictions)
-    
-    # Check shapes of concatenated arrays
-    print("Sample weights shape:", all_weights_concatenated.shape)
-    print("Predictions shape:", all_predictions_concatenated.shape)
-    
-    # Aggregate model updates
-    average_model = DecisionTreeRegressor().fit(Xtest, np.average(all_predictions_concatenated, weights=all_weights_concatenated, axis=0))
-    return average_model
+    return G
 
 
 # Function to visualize the graph and save the image
@@ -182,7 +191,7 @@ def main():
                     knn_graph = add_edges_k8s(client_updates)
                     visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
                     # TODO: Modify aggregate_updates by using FedRelax
-                    # global_model = aggregate_updates(Xtest, client_updates)
+                    final_graph = FedRelax(Xtest, knn_graph, client_updates)
 
                     print("Sending global model back to client")
                     send_global_model_to_client(global_model, client_socket)

@@ -10,6 +10,8 @@ import json
 import time
 import subprocess
 from kubernetes import client, config
+import signal
+import sys
 
 
 def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
@@ -84,6 +86,8 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     return model
 
 
+import select
+
 def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip, port=3000):
     # Establish connection to the server using socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -91,6 +95,7 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
         client_socket.connect((peer_ip, port))
     except Exception as e:
         print(f"Error connecting to server: {e}")
+        client_socket.close()  # Close the socket if connection fails
         return
 
     try:
@@ -120,18 +125,39 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
         client_socket.send(message_with_header)
         print("Model update sent to server")
 
-        # Receive acknowledgment from server
-        ack = client_socket.recv(1024)
-        print("Server acknowledgment:", ack.decode('utf-8'))
-
+        # TODO: Modify timeout later. This is a work around
+        ready = select.select([client_socket], [], [], 10)  # Timeout set to 10 seconds
+        if ready[0]:
+            data = receive_data(client_socket)
+            if data:
+                neighbourpred = np.array(data['neighbourpred'])
+                Xtest = np.array(data['Xtest'])
+                testsize = data['testsize']
+                print("Received predictions from server:", neighbourpred)
+                
+                # TODO: Perform further actions with the received data
+        else:
+            print("Timeout: No response from server")
+            
+    except KeyboardInterrupt:
+        print("Keyboard interrupt detected. Closing socket.")
     except Exception as e:
         print(f"Error sending model update to server: {e}")
-        # Close the socket connection in case of an error
-        client_socket.close()
-        print("Connection closed due to error")
-    
     finally:
+        # Close the socket connection in the finally block to ensure it's always closed
         client_socket.close()
+
+
+def receive_data(server_socket):
+    try:
+        message_header = server_socket.recv(2)
+        if not len(message_header):
+            return False
+        message_length = int.from_bytes(message_header, byteorder='big')
+        data = server_socket.recv(message_length)
+        return json.loads(data.decode())
+    except:
+        return False
 
 
 # TODO: Should be replaced by load balancer (Optional)
@@ -158,7 +184,6 @@ def get_random_server_pod_ip(namespace="fed-relax"):
         print("Failed to retrieve the IP address of a random server pod.")
     
     return pod_ip
-
     
 # Wait for job completion (initialization job in this example)
 wait_for_job_completion()
