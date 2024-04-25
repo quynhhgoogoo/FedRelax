@@ -12,14 +12,6 @@ from sklearn.neighbors import kneighbors_graph
 import base64
 import pickle
 
-# Define a class to represent a node in the FedRelax graph
-class Node:
-    def __init__(self, pod_name, model, weight, coords):
-        self.name = pod_name
-        self.model = None  # Initialize local model
-        self.weight = None  # Store received client update
-        self.coords = None
-
 
 # Function to receive data from a client socket
 def receive_data(client_socket):
@@ -34,7 +26,7 @@ def receive_data(client_socket):
         return False
 
 
-# Function to send global model froms server back to client
+# Function to send global model from server back to client
 def send_global_model_to_client(global_model, client_socket):
     try:
         # Encode global model using base64
@@ -51,7 +43,7 @@ def send_global_model_to_client(global_model, client_socket):
         print(f"Error sending global model to client: {e}")
 
 #TODO: Reupdate nrneighbors to number of active pods
-def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
+def add_edges_k8s(clients_attributes, namespace="fed-relax", nrneighbors=1, pos='coords', refdistance=1):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -59,9 +51,14 @@ def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='
     
     # Initialize empty graph
     graph = nx.Graph()
+
+    # Add nodes to the graph with pod attributes
+    for pod_name, attributes in clients_attributes.items():
+        graph.add_node(pod_name, **attributes)
     
     # Build a numpy array containing node positions
-    node_positions = np.array([attributes["coords"] for attributes in clients_attributes], dtype=float)
+    node_positions = np.array([attributes["coords"] for attributes in clients_attributes.values()], dtype=float)
+    print(node_positions)
     
     # Calculate k-nearest neighbors graph
     A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
@@ -70,8 +67,8 @@ def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='
     for i in range(len(clients_attributes)):
         for j in range(len(clients_attributes)):
             if A[i, j] > 0:
-                pod_name_i = clients_attributes[i]["pod_name"]
-                pod_name_j = clients_attributes[j]["pod_name"]
+                pod_name_i = list(clients_attributes.keys())[i]
+                pod_name_j = list(clients_attributes.keys())[i]
                 
                 # Calculate the Euclidean distance between pods based on their positions
                 distance = np.linalg.norm(node_positions[i] - node_positions[j])
@@ -83,23 +80,20 @@ def add_edges_k8s(clients_attributes,namespace="fed-relax", nrneighbors=1, pos='
 
 
 # Fed Relax's main function
-def FedRelax(Xtest, updated_graph, client_updates, namespace="fed-relax", regparam=0, maxiter=100):
+def FedRelax(Xtest, knn_graph, client_attributes, client_socket, namespace="fed-relax", regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
-    G = updated_graph
+    G = knn_graph
 
     # Attach a DecisionTreeRegressor as the local model to each node in G
     for node_i in G.nodes(data=False): 
-        print(G.nodes[node_i])
-        print(client_updates[node_i])
-        G.nodes[node_i]["model"] = client_updates[node_i]["model"]
-        G.nodes[node_i]["sample_weight"] = client_updates[node_i]["sample_weight"]  # Initialize sample weights
+        G.nodes[node_i]["model"] = client_attributes[node_i]["model"]
+        G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]  # Initialize sample weights
     
-
     # Iterate over all nodes in the graph
     for node_i in G.nodes(data=False):
         # Share predictions with neighbors
-        for node_j in G[node_i]:
+        for node_j in G.neighbors(node_i):
             # Add the predictions of the current hypothesis at node j as labels
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
 
@@ -109,10 +103,11 @@ def FedRelax(Xtest, updated_graph, client_updates, namespace="fed-relax", regpar
                 "Xtest": Xtest.tolist(),
                 "testsize": testsize
             }
+            print("Sending data to client", data_to_send)
 
             # Send the data back to clients
             data_to_send_encoded = json.dumps(data_to_send).encode()
-            send_global_model_to_client(data_to_send_encoded)
+            send_global_model_to_client(data_to_send_encoded, client_socket=client_socket)
     
     return G
 
@@ -145,7 +140,7 @@ def main():
     print(f'Listening for connections on {HOST}:{PORT}...')
 
     # Initialize empty graph
-    graph = defaultdict(Node)
+    client_attributes = {}
 
     # Global model and test data
     global_model = None
@@ -169,12 +164,20 @@ def main():
                 print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}, {coords}")
 
                 # Decode client updates serialized data
-                client_update['model_params'], client_update['coords'] = model_params, coords
+                try:
+                    client_update['model_params'], client_update['coords'] = model_params, coords
+                except Exception as e:
+                    print(f"Error decoding client updates: {e}")
+                    print(f"Received data: {data}")
+
 
                 # Update node information in the graph
-                if pod_name not in graph:
-                    graph[pod_name] = Node(pod_name, model_params, sample_weight, coords)
-                graph[pod_name].update = client_update
+                pod_attributes = {
+                    "coords": coords,
+                    "model": model_params,
+                    "sample_weight": sample_weight
+                }
+                client_attributes[pod_name] = pod_attributes
 
                 # Send a simple acknowledgment message to the client
                 ack_message = json.dumps({"message": "Update received"}).encode()
@@ -185,20 +188,19 @@ def main():
                     log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
 
                 # Trigger global model update after receiving updates from all clients
-                if len(graph) == desired_num_clients:
-                    client_updates = [node.update for node in graph.values() if node.update is not None]
-                    print(client_updates)
-                    knn_graph = add_edges_k8s(client_updates)
+                if len(client_attributes) == desired_num_clients:
+                    print("Graph after being fully updated", client_attributes)
+                    knn_graph = add_edges_k8s(client_attributes)
                     visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
                     # TODO: Modify aggregate_updates by using FedRelax
-                    final_graph = FedRelax(Xtest, knn_graph, client_updates)
+                    final_graph = FedRelax(Xtest, knn_graph, client_attributes, client_socket)
+                    visualize_and_save_graph(final_graph, '/app/fin_graph.png')
 
                     print("Sending global model back to client")
                     send_global_model_to_client(global_model, client_socket)
 
                     # Reset client updates for the next round
-                    for node in graph.values():
-                        node.update = None
+                    # graph = {}
 
             except Exception as e:
                 print(f"Error processing client update: {e}")

@@ -126,7 +126,7 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
         print("Model update sent to server")
 
         # TODO: Modify timeout later. This is a work around
-        ready = select.select([client_socket], [], [], 10)  # Timeout set to 10 seconds
+        ready = select.select([client_socket], [], [], 120)  # Timeout set to 90 seconds
         if ready[0]:
             data = receive_data(client_socket)
             if data:
@@ -144,7 +144,6 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
     except Exception as e:
         print(f"Error sending model update to server: {e}")
     finally:
-        # Close the socket connection in the finally block to ensure it's always closed
         client_socket.close()
 
 
