@@ -12,7 +12,8 @@ import subprocess
 from kubernetes import client, config
 import signal
 import sys
-
+import datetime
+import select
 
 def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
     config.load_incluster_config()  # Load incluster config if running inside a pod
@@ -86,8 +87,6 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     return model
 
 
-import select
-
 def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip, port=3000):
     # Establish connection to the server using socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -125,20 +124,25 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
         client_socket.send(message_with_header)
         print("Model update sent to server")
 
-        # TODO: Modify timeout later. This is a work around
-        ready = select.select([client_socket], [], [], 120)  # Timeout set to 90 seconds
-        if ready[0]:
-            data = receive_data(client_socket)
-            if data:
-                neighbourpred = np.array(data['neighbourpred'])
-                Xtest = np.array(data['Xtest'])
-                testsize = data['testsize']
-                print("Received predictions from server:", neighbourpred)
-                
-                # TODO: Perform further actions with the received data
-        else:
-            print("Timeout: No response from server")
-            
+        start_time = datetime.datetime.now()  # Record start time for timeout
+        
+        while True:
+            # Check if the socket is ready to read
+            ready = select.select([client_socket], [], [], 120)  # Timeout set to 120 seconds
+            if ready[0]:
+                data = receive_data(client_socket)
+                if data:
+                    neighbourpred = np.array(data['neighbourpred'])
+                    Xtest = np.array(data['Xtest'])
+                    testsize = data['testsize']
+                    print("Received predictions from server:", neighbourpred)
+                    break  # Exit the loop after receiving predictions
+            else:
+                elapsed_time = datetime.datetime.now() - start_time
+                if elapsed_time.total_seconds() >= 120:  # Check if 2 minutes have elapsed
+                    print("Timeout: No response from server after 2 minutes")
+                    break  # Exit the loop after timeout
+
     except KeyboardInterrupt:
         print("Keyboard interrupt detected. Closing socket.")
     except Exception as e:
