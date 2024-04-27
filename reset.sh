@@ -79,3 +79,7 @@ minikube addons enable metrics-server
 
 # Download image to local machine
 # kubectl cp server-8677d94948-w4xpf:/app/init_graph.png ./output/init_graph.png
+
+# Expose pod as service
+# kubectl expose deployment client --port=3000 --target-port=5000 --type=ClusterIP --name=client-service
+# kubectl expose deployment server --port=3000 --target-port=3000 --type=ClusterIP --name=server-service
