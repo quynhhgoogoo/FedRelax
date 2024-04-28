@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+def multiply(num):
+    return num + 1
+
 @app.route('/send_data', methods=['POST'])
 def send_data():
     try:
@@ -25,7 +28,7 @@ def receive_data():
         data = request.json.get('data')
 
         # Process the received data (add 1 to it)
-        final_response = data + 1
+        final_response = multiply(data)
 
         # Send the processed data back to the client
         return jsonify({"message": "Data processed successfully.", "final_response": final_response}), 200
