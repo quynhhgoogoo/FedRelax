@@ -126,7 +126,7 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
         print(f"Error sending model update to server: {e}")
 
     
-# Wait for job completion 
+# TODO: Remove this after replace ConfigMap by Docker Volume
 # wait_for_job_completion()
 
 # Get pod name and ConfigMap data
