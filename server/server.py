@@ -83,8 +83,9 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
 
             # Send the data back to clients
             data_to_send_encoded = json.dumps(data_to_send).encode()
+            send_data_to_client(data_to_send_encoded)
 
-    return data_to_send_encoded
+    return G
 
 
 # Function to visualize the graph and save the image
@@ -140,7 +141,7 @@ def process_client_attributes(client_update):
 
 
 # Server-side script for FedRelax on Kubernetes
-def main(client_attributes):
+def runFedRelax(client_attributes):
     # TODO: Modify this value to the number of client pods
     desired_num_clients = 2
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
@@ -156,11 +157,9 @@ def main(client_attributes):
 
 
 @app.route('/send_data', methods=['POST'])
-def send_global_model_to_client():
+def send_data_to_client(data_to_send):
     try:
-        data = request.get_json()
-        #main(data)
-        return jsonify({"message": "Data processed successfully."}), 200
+        return jsonify({"message": "Data processed successfully.", "data": data_to_send}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -175,6 +174,8 @@ def receive_model_update():
         # Process the received JSON data
         client_attributes = process_client_attributes(data)
         print("Processed attributes:", client_attributes)
+
+        runFedRelax(client_attributes)
 
         # Send the processed data back to the client
         return jsonify({"message": "Data processed successfully."}), 200

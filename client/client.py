@@ -125,7 +125,30 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
     except Exception as e:
         print(f"Error sending model update to server: {e}")
 
+
+def receive_data_from_server(peer_ip="server-service", port=3000):
+    SERVER_URL = 'http://localhost:5000/send_data'
+    try:
+        # Make a POST request to the server's endpoint
+        response = requests.post(SERVER_URL)
+
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            # Extract the data from the response
+            data_received = response.json()
+            print("Data received from server:", data_received)
+            return data_received["data"]  # Assuming the server returns the data in the "data" field
+        else:
+            # Print an error message if the request was not successful
+            print(f"Failed to receive data from server. Status code: {response.status_code}")
+            return None
+
+    except Exception as e:
+        # Print an error message if an exception occurs
+        print(f"Error receiving data from server: {e}")
+        return None
     
+
 # TODO: Remove this after replace ConfigMap by Docker Volume
 # wait_for_job_completion()
 
@@ -149,3 +172,6 @@ if configmap_data:
     send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
 else:
     print("Error: ConfigMap data not found.")
+
+# Call the function to receive data from the server
+received_data = receive_data_from_server()
