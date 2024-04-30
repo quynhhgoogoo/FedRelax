@@ -103,11 +103,11 @@ def decode_and_unpickle(encoded_data):
     unpickled_data = pickle.loads(decoded_data)
     return unpickled_data
 
-def process_client_attributes(data):
-    global client_attributes 
+def process_client_attributes(client_update):
+    client_attributes = {}
 
     # Receive client update
-    client_update = json.loads(data)
+    # client_update = json.loads(data)
     pod_name = client_update['pod_name']
 
     # Decode model parameters, sample weights, coords
@@ -121,7 +121,7 @@ def process_client_attributes(data):
         client_update['model_params'], client_update['coords'] = model_params, coords
     except Exception as e:
         print(f"Error decoding client updates: {e}")
-        print(f"Received data: {data}")
+        print(f"Received data: {client_update}")
 
     # Update node information in the graph
     pod_attributes = {
@@ -140,8 +140,7 @@ def process_client_attributes(data):
 
 
 # Server-side script for FedRelax on Kubernetes
-def main():
-    client_attributes = process_client_attributes()
+def main(client_attributes):
     # TODO: Modify this value to the number of client pods
     desired_num_clients = 2
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
@@ -172,11 +171,16 @@ def receive_model_update():
         # Receive data from the client
         data = request.get_json()
         print("Received client attributes", data)
-        process_client_attributes(data)
+
+        # Process the received JSON data
+        client_attributes = process_client_attributes(data)
+        print("Processed attributes:", client_attributes)
 
         # Send the processed data back to the client
         return jsonify({"message": "Data processed successfully."}), 200
     except Exception as e:
+        # Handle exceptions
+        print("Error:", e)
         return jsonify({"error": str(e)}), 400
 
 
