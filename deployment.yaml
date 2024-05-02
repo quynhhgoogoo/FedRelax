@@ -33,7 +33,7 @@ metadata:
   name: client
   namespace: fed-relax
 spec:
-  replicas: 20
+  replicas: 3
   selector:
     matchLabels:
       app: fedrelax-client

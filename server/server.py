@@ -12,7 +12,7 @@ import datetime
 app = Flask(__name__)
 
 # Initialize empty dictionary to store client attributes
-client_attributes = {}
+all_client_attributes = {}
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
@@ -73,17 +73,19 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
             # Add the predictions of the current hypothesis at node j as labels
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
 
-            # Prepare data to be sent back to clients
+            # Prepare data to be sent to the /send_data API
             data_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),
                 "testsize": testsize
             }
-            print("Sending data to client", data_to_send)
 
-            # Send the data back to clients
-            data_to_send_encoded = json.dumps(data_to_send).encode()
-            send_data_to_client(data_to_send_encoded)
+            # Send the data to the /send_data API endpoint
+            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send)
+            if response.status_code == 200:
+                print("Data sent to client successfully")
+            else:
+                print("Failed to send data to client")
 
     return G
 
@@ -105,10 +107,9 @@ def decode_and_unpickle(encoded_data):
     return unpickled_data
 
 def process_client_attributes(client_update):
-    client_attributes = {}
-
+    global all_client_attributes
+    
     # Receive client update
-    # client_update = json.loads(data)
     pod_name = client_update['pod_name']
 
     # Decode model parameters, sample weights, coords
@@ -117,50 +118,48 @@ def process_client_attributes(client_update):
     coords = decode_and_unpickle(client_update['coords'])
     print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}, {coords}")
 
-    # Decode client updates serialized data
-    try:
-        client_update['model_params'], client_update['coords'] = model_params, coords
-    except Exception as e:
-        print(f"Error decoding client updates: {e}")
-        print(f"Received data: {client_update}")
-
     # Update node information in the graph
     pod_attributes = {
         "coords": coords,
         "model": model_params,
         "sample_weight": sample_weight
     }
-    client_attributes[pod_name] = pod_attributes
-    print(client_attributes)
+    
+    # Add the attributes to the global dictionary
+    all_client_attributes[pod_name] = pod_attributes
 
     # Log information about received update with timestamp
     with open("server_logs.txt", "a") as log_file:
         log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
             
-    return client_attributes
 
-
-# Server-side script for FedRelax on Kubernetes
+# Trigger global model update after receiving updates from all clients
 def runFedRelax(client_attributes):
+    print("Running FedRelax")
     # TODO: Modify this value to the number of client pods
     desired_num_clients = 2
+    print("Current number of clients: ", desired_num_clients)
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
 
-    # Trigger global model update after receiving updates from all clients
-    if len(client_attributes) == desired_num_clients:
-        print("Graph after being fully updated", client_attributes)
-        knn_graph = add_edges_k8s(client_attributes)
-        visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
-        # TODO: Modify aggregate_updates by using FedRelax
-        final_graph = FedRelax(Xtest, knn_graph, client_attributes)
-        visualize_and_save_graph(final_graph, '/app/fin_graph.png')
+    print("Graph after being fully updated", client_attributes)
+    knn_graph = add_edges_k8s(client_attributes)
+    visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
+    # TODO: Modify aggregate_updates by using FedRelax
+    final_graph = FedRelax(Xtest, knn_graph, client_attributes)
+    visualize_and_save_graph(final_graph, '/app/fin_graph.png')
 
 
 @app.route('/send_data', methods=['POST'])
-def send_data_to_client(data_to_send):
+def send_data_to_client():
     try:
+        # Receive data from the request
+        data_to_send = request.json
+        print(data_to_send)
+
+        # Send the processed data back to the client
         return jsonify({"message": "Data processed successfully.", "data": data_to_send}), 200
     except Exception as e:
+        # Handle any exceptions
         return jsonify({"error": str(e)}), 400
 
 
@@ -172,12 +171,15 @@ def receive_model_update():
         print("Received client attributes", data)
 
         # Process the received JSON data
-        client_attributes = process_client_attributes(data)
-        print("Processed attributes:", client_attributes)
+        process_client_attributes(data)
+        desired_num_pods = 2
+        
+        # Check if all pods have sent their attributes
+        if len(all_client_attributes) == desired_num_pods:
+            runFedRelax(all_client_attributes)
+            all_client_attributes.clear()  # Clear the dictionary for the next iteration
 
-        runFedRelax(client_attributes)
-
-        # Send the processed data back to the client
+        # Send the response
         return jsonify({"message": "Data processed successfully."}), 200
     except Exception as e:
         # Handle exceptions

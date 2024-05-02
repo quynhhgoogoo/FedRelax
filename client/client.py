@@ -127,7 +127,7 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
 
 
 def receive_data_from_server(peer_ip="server-service", port=3000):
-    SERVER_URL = 'http://localhost:5000/send_data'
+    SERVER_URL = f"http://{peer_ip}:{port}/send_data"
     try:
         # Make a POST request to the server's endpoint
         response = requests.post(SERVER_URL)
@@ -173,5 +173,12 @@ if configmap_data:
 else:
     print("Error: ConfigMap data not found.")
 
-# Call the function to receive data from the server
-received_data = receive_data_from_server()
+
+data_received = False
+
+while not data_received:
+    received_data = receive_data_from_server()
+    if received_data is not None:
+        data_received = True
+    else:
+        time.sleep(120)
