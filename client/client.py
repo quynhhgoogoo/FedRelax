@@ -180,5 +180,6 @@ while not data_received:
     received_data = receive_data_from_server()
     if received_data is not None:
         data_received = True
+        print(received_data)
     else:
-        time.sleep(120)
+        time.sleep(60)

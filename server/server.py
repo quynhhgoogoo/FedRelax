@@ -55,37 +55,42 @@ def decode_and_unpickle(encoded_data):
     return unpickled_data
 
 
-# Server-side script for FedRelax on Kubernetes
 def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
     G = knn_graph
 
-    # Attach a DecisionTreeRegressor as the local model to each node in G
+    # Attach models and weights to nodes
     for node_i in G.nodes(data=False):
         G.nodes[node_i]["model"] = client_attributes[node_i]["model"]
-        G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]  # Initialize sample weights
+        G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]
 
-    # Iterate over all nodes in the graph
+    # Iterate and share predictions
     for node_i in G.nodes(data=False):
-        # Share predictions with neighbors
         for node_j in G.neighbors(node_i):
-            # Add the predictions of the current hypothesis at node j as labels
+            # Share predictions with neighbors
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
 
-            # Prepare data to be sent to the /send_data API
+            # Prepare data to send to the server API
             data_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),
                 "testsize": testsize
             }
 
-            # Send the data to the /send_data API endpoint
-            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send)
+            # Send data to the server API endpoint with error handling
+            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send, headers={'Content-Type': 'application/json'})
+
             if response.status_code == 200:
-                print("Data sent to client successfully")
+                print("Data sent to API successfully")
             else:
-                print("Failed to send data to client")
+                print(f"Failed to send data to API. Status code: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    if "error" in error_data:
+                        print(f"Server error: {error_data['error']}")
+                except Exception:
+                    pass
 
     return G
 
@@ -152,14 +157,25 @@ def runFedRelax(client_attributes):
 @app.route('/send_data', methods=['POST'])
 def send_data_to_client():
     try:
+        # Validate Content-Type header
+        if 'Content-Type' not in request.headers:
+            return jsonify({"error": "Missing Content-Type header."}), 400
+
+        if request.headers['Content-Type'] != 'application/json':
+            return jsonify({"error": "Invalid Content-Type. Expected application/json."}), 415
+
         # Receive data from the request
-        data_to_send = request.json
-        print(data_to_send)
+        data_to_send = request.get_json(force=True)
+        print("Received data:", data_to_send)
+
 
         # Send the processed data back to the client
-        return jsonify({"message": "Data processed successfully.", "data": data_to_send}), 200
+        response_data = {"message": "Data processed successfully.", "data": data_to_send}
+        print("Sending response:", response_data)
+        return jsonify(response_data), 200
     except Exception as e:
-        # Handle any exceptions
+        # Handle exceptions
+        print("Error sending data to client:", e)
         return jsonify({"error": str(e)}), 400
 
 
