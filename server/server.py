@@ -89,8 +89,9 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
                     error_data = response.json()
                     if "error" in error_data:
                         print(f"Server error: {error_data['error']}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Error:", e)
+                    return jsonify({"error": str(e)}), 400
 
     return G
 
@@ -168,13 +169,28 @@ def send_data_to_client():
         data_to_send = request.get_json(force=True)
         print("Received data:", data_to_send)
 
+        # Send the processed data back to the client
+        response_data = {"message": "Data processed successfully.", "data": data_to_send}
+        print("Sending response:", response_data)
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print("Error sending data to client:", e)
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route('/send_test', methods=['POST'])
+def send():
+    try:
+        data_to_send = {'neighbourpred': [[0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198]], 'Xtest': [[0.0], [0.1], [0.2], [0.30000000000000004], [0.4], [0.5], [0.6000000000000001], [0.7000000000000001], [0.8], [0.9]], 'testsize': 10}
+        print("Received data:", data_to_send)
 
         # Send the processed data back to the client
         response_data = {"message": "Data processed successfully.", "data": data_to_send}
         print("Sending response:", response_data)
         return jsonify(response_data), 200
+
     except Exception as e:
-        # Handle exceptions
         print("Error sending data to client:", e)
         return jsonify({"error": str(e)}), 400
 
@@ -193,12 +209,12 @@ def receive_model_update():
         # Check if all pods have sent their attributes
         if len(all_client_attributes) == desired_num_pods:
             runFedRelax(all_client_attributes)
-            all_client_attributes.clear()  # Clear the dictionary for the next iteration
+            #all_client_attributes.clear()
 
         # Send the response
         return jsonify({"message": "Data processed successfully."}), 200
+
     except Exception as e:
-        # Handle exceptions
         print("Error:", e)
         return jsonify({"error": str(e)}), 400
 

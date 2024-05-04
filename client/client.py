@@ -137,7 +137,7 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
             # Extract the data from the response
             data_received = response.json()
             print("Data received from server:", data_received)
-            return data_received["data"]  # Assuming the server returns the data in the "data" field
+            return data_received
         else:
             # Print an error message if the request was not successful
             print(f"Failed to receive data from server. Status code: {response.status_code}")
