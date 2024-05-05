@@ -178,7 +178,6 @@ def send_data_to_client():
         print("Error sending data to client:", e)
         return jsonify({"error": str(e)}), 400
 
-
 @app.route('/send_test', methods=['POST'])
 def send():
     try:
