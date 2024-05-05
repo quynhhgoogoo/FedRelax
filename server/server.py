@@ -75,7 +75,8 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
             data_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),
-                "testsize": testsize
+                "testsize": testsize,
+                "weight": G.edges[(node_i, node_j)]["weight"]
             }
 
             # Send data to the server API endpoint with error handling

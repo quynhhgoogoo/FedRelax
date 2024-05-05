@@ -147,6 +147,25 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
         # Print an error message if an exception occurs
         print(f"Error receiving data from server: {e}")
         return None
+
+
+def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0):
+    # Extract predictions from server
+    neighbourpred = server_predictions['data']['neighbourpred']
+    Xtest = server_predictions['data']['Xtest']
+    testsize = server_predictions['data']['testsize']
+    weight = server_predictions['data']['weight']
+    print(neighbourpred)
+
+    # Augment local dataset by a new dataset obtained from the features of the test set
+    neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+    ytrain = np.vstack((ytrain, neighbourpred))
+    Xtrain = np.vstack((Xtrain, Xtest))
+
+    # Set sample weights of added local dataset according to edge weight of edge i <-> j and GTV regularization parameter
+    sampleweightaug = (regparam * len(ytrain) / testsize)
+    sample_weight = np.vstack(sample_weight, sampleweightaug * weight * np.ones((len(neighbourpred), 1)))
+    print(sample_weight, sampleweightaug)
     
 
 # TODO: Remove this after replace ConfigMap by Docker Volume
@@ -178,9 +197,11 @@ data_received = False
 
 while not data_received:
     time.sleep(30)
-    received_data = receive_data_from_server()
-    if received_data is not None:
+    server_predictions = receive_data_from_server()
+    if server_predictions is not None:
         data_received = True
-        print(received_data)
+        print(server_predictions)
     else:
         time.sleep(60)
+
+FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
