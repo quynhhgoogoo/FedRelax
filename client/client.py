@@ -127,7 +127,7 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
 
 
 def receive_data_from_server(peer_ip="server-service", port=3000):
-    SERVER_URL = f"http://{peer_ip}:{port}/send_test"
+    SERVER_URL = f"http://{peer_ip}:{port}/send_data"
     try:
         # Make a POST request to the server's endpoint
         response = requests.post(SERVER_URL)

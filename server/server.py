@@ -1,3 +1,4 @@
+from http.client import responses
 import requests
 import pickle
 import json
@@ -81,6 +82,7 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
 
             # Send data to the server API endpoint with error handling
             response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send, headers={'Content-Type': 'application/json'})
+            print("Send from FedRelaxServer to API", response.headers, response.json)
 
             if response.status_code == 200:
                 print("Data sent to API successfully")
@@ -161,6 +163,7 @@ def send_data_to_client():
     try:
         # Validate Content-Type header
         if 'Content-Type' not in request.headers:
+            print("Missing Content-Type header", request.headers, request.json, request)
             return jsonify({"error": "Missing Content-Type header."}), 400
 
         if request.headers['Content-Type'] != 'application/json':
@@ -172,23 +175,13 @@ def send_data_to_client():
 
         # Send the processed data back to the client
         response_data = {"message": "Data processed successfully.", "data": data_to_send}
-        print("Sending response:", response_data)
-        return jsonify(response_data), 200
 
-    except Exception as e:
-        print("Error sending data to client:", e)
-        return jsonify({"error": str(e)}), 400
+        # Add Content-Type header to the response
+        response = jsonify(response_data)
+        response.headers['Content-Type'] = 'application/json'
 
-@app.route('/send_test', methods=['POST'])
-def send():
-    try:
-        data_to_send = {'neighbourpred': [[0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198]], 'Xtest': [[0.0], [0.1], [0.2], [0.30000000000000004], [0.4], [0.5], [0.6000000000000001], [0.7000000000000001], [0.8], [0.9]], 'testsize': 10}
-        print("Received data:", data_to_send)
-
-        # Send the processed data back to the client
-        response_data = {"message": "Data processed successfully.", "data": data_to_send}
-        print("Sending response:", response_data)
-        return jsonify(response_data), 200
+        print("Sending response:", response)
+        return response, 200
 
     except Exception as e:
         print("Error sending data to client:", e)
