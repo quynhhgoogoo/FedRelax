@@ -129,8 +129,8 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
 def receive_data_from_server(peer_ip="server-service", port=3000):
     SERVER_URL = f"http://{peer_ip}:{port}/send_data"
     try:
-        # Make a POST request to the server's endpoint
-        response = requests.post(SERVER_URL)
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(SERVER_URL, headers=headers)
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:

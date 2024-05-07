@@ -3,6 +3,11 @@
 # minikube ssh -- docker system prune
 # minikube start
 
+# Shifting to kind
+# kubectl cluster-info --context kind-kind
+# kind create cluster --config 1m.3w.config --name cluster1
+# kubectl cluster-info --context kind-cluster1
+
 # Amateur clean
 # docker system prune -a 
 # sudo docker image pull python:3.9  

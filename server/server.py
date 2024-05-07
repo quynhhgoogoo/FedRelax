@@ -81,7 +81,8 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
             }
 
             # Send data to the server API endpoint with error handling
-            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send, headers={'Content-Type': 'application/json'})
+            data_to_send_copy = data_to_send.copy()
+            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send_copy, headers={'Content-Type': 'application/json'})
             print("Send from FedRelaxServer to API", response.headers, response.json)
 
             if response.status_code == 200:
@@ -167,16 +168,16 @@ def send_data_to_client():
             return jsonify({"error": "Missing Content-Type header."}), 400
 
         if request.headers['Content-Type'] != 'application/json':
+            print("Invalid Content-Type. Expected application/json.", request.headers['Content-Type'])
             return jsonify({"error": "Invalid Content-Type. Expected application/json."}), 415
 
         # Receive data from the request
         data_to_send = request.get_json(force=True)
+        data_to_send = {'neighbourpred': [[0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198]], 'Xtest': [[0.0], [0.1], [0.2], [0.30000000000000004], [0.4], [0.5], [0.6000000000000001], [0.7000000000000001], [0.8], [0.9]], 'testsize': 10, 'weight': 3.487818617164047}
         print("Received data:", data_to_send)
 
-        # Send the processed data back to the client
-        response_data = {"message": "Data processed successfully.", "data": data_to_send}
-
         # Add Content-Type header to the response
+        response_data = json.dumps(data_to_send)
         response = jsonify(response_data)
         response.headers['Content-Type'] = 'application/json'
 
