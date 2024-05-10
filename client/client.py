@@ -150,22 +150,23 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
 
 
 def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0):
-    # Extract predictions from server
-    neighbourpred = server_predictions['data']['neighbourpred']
-    Xtest = server_predictions['data']['Xtest']
-    testsize = server_predictions['data']['testsize']
-    weight = server_predictions['data']['weight']
-    print(neighbourpred)
+    for i, prediction in enumerate(server_predictions):
+        # Extract predictions from server
+        neighbourpred = server_predictions[i]['neighbourpred']
+        Xtest = server_predictions[i]['Xtest']
+        testsize = server_predictions[i]['testsize']
+        weight = server_predictions[i]['weight']
+        print(neighbourpred)
 
-    # Augment local dataset by a new dataset obtained from the features of the test set
-    neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
-    ytrain = np.vstack((ytrain, neighbourpred))
-    Xtrain = np.vstack((Xtrain, Xtest))
+        # Augment local dataset by a new dataset obtained from the features of the test set
+        neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+        ytrain = np.vstack((ytrain, neighbourpred))
+        Xtrain = np.vstack((Xtrain, Xtest))
 
-    # Set sample weights of added local dataset according to edge weight of edge i <-> j and GTV regularization parameter
-    sampleweightaug = (regparam * len(ytrain) / testsize)
-    sample_weight = np.vstack(sample_weight, sampleweightaug * weight * np.ones((len(neighbourpred), 1)))
-    print(sample_weight, sampleweightaug)
+        # Set sample weights of added local dataset according to edge weight of edge i <-> j and GTV regularization parameter
+        sampleweightaug = (regparam * len(ytrain) / testsize)
+        sample_weight = np.vstack(sample_weight, sampleweightaug * weight * np.ones((len(neighbourpred), 1)))
+        print(sample_weight, sampleweightaug)
     
 
 # TODO: Remove this after replace ConfigMap by Docker Volume

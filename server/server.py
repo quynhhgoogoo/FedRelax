@@ -69,20 +69,22 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
         G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]
 
     # Iterate and share predictions
+    data_to_send = dict()
     for node_i in G.nodes(data=False):
         for node_j in G.neighbors(node_i):
             # Share predictions with neighbors
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
 
             # Prepare data to send to the server API
-            data_to_send = {
+            neighbour_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),
                 "testsize": testsize,
                 "weight": G.edges[(node_i, node_j)]["weight"]
             }
+            data_to_send[node_i].append(neighbour_to_send)
 
-            data_to_sends.append(data_to_send)  # Append data_to_send to the list
+        data_to_sends.append(data_to_send)
 
     return data_to_sends, G
 
@@ -133,9 +135,6 @@ def process_client_attributes(client_update):
 # Trigger global model update after receiving updates from all clients
 def runFedRelax(client_attributes):
     print("Running FedRelax")
-    # TODO: Modify this value to the number of client pods
-    desired_num_clients = 2
-    print("Current number of clients: ", desired_num_clients)
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
 
     print("Graph after being fully updated", client_attributes)
@@ -178,7 +177,7 @@ def receive_model_update():
         # Check if all pods have sent their attributes
         if len(all_client_attributes) == desired_num_pods:
             runFedRelax(all_client_attributes)
-            #all_client_attributes.clear()
+            all_client_attributes.clear()
 
         # Send the response
         return jsonify({"message": "Data processed successfully."}), 200
