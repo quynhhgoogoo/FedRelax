@@ -17,7 +17,7 @@ import requests
 from flask import Flask, request, jsonify
 
 def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
-    config.load_incluster_config()  # Load incluster config if running inside a pod
+    config.load_incluster_config() 
     api_instance = client.BatchV1Api()
     try:
         job = api_instance.read_namespaced_job(job_name, namespace)

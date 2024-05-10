@@ -45,7 +45,6 @@ kubectl apply -f service_account.yaml
 
 # Deployment scripts to simplify the process
 kubectl apply -f service.yaml
-#kubectl apply -f pods.yaml
 kubectl apply -f deployment.yaml
 kubectl apply -f init_job.yaml
 kubectl get pods -n fed-relax

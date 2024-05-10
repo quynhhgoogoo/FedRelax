@@ -14,6 +14,8 @@ app = Flask(__name__)
 
 # Initialize empty dictionary to store client attributes
 all_client_attributes = {}
+# Initialize empty dictionary to store all neighbour predictions's attributes
+data_to_sends = []
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
@@ -80,24 +82,9 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
                 "weight": G.edges[(node_i, node_j)]["weight"]
             }
 
-            # Send data to the server API endpoint with error handling
-            data_to_send_copy = data_to_send.copy()
-            response = requests.post("http://127.0.0.1:3000/send_data", json=data_to_send_copy, headers={'Content-Type': 'application/json'})
-            print("Send from FedRelaxServer to API", response.headers, response.json)
+            data_to_sends.append(data_to_send)  # Append data_to_send to the list
 
-            if response.status_code == 200:
-                print("Data sent to API successfully")
-            else:
-                print(f"Failed to send data to API. Status code: {response.status_code}")
-                try:
-                    error_data = response.json()
-                    if "error" in error_data:
-                        print(f"Server error: {error_data['error']}")
-                except Exception as e:
-                    print("Error:", e)
-                    return jsonify({"error": str(e)}), 400
-
-    return G
+    return data_to_sends, G
 
 
 # Function to visualize the graph and save the image
@@ -155,29 +142,17 @@ def runFedRelax(client_attributes):
     knn_graph = add_edges_k8s(client_attributes)
     visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
     # TODO: Modify aggregate_updates by using FedRelax
-    final_graph = FedRelax(Xtest, knn_graph, client_attributes)
+    data,final_graph = FedRelax(Xtest, knn_graph, client_attributes)
     visualize_and_save_graph(final_graph, '/app/fin_graph.png')
 
 
 @app.route('/send_data', methods=['POST'])
 def send_data_to_client():
     try:
-        # Validate Content-Type header
-        if 'Content-Type' not in request.headers:
-            print("Missing Content-Type header", request.headers, request.json, request)
-            return jsonify({"error": "Missing Content-Type header."}), 400
-
-        if request.headers['Content-Type'] != 'application/json':
-            print("Invalid Content-Type. Expected application/json.", request.headers['Content-Type'])
-            return jsonify({"error": "Invalid Content-Type. Expected application/json."}), 415
-
-        # Receive data from the request
-        data_to_send = request.get_json(force=True)
-        data_to_send = {'neighbourpred': [[0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198], [0.8428224817148198]], 'Xtest': [[0.0], [0.1], [0.2], [0.30000000000000004], [0.4], [0.5], [0.6000000000000001], [0.7000000000000001], [0.8], [0.9]], 'testsize': 10, 'weight': 3.487818617164047}
-        print("Received data:", data_to_send)
-
+        global data_to_sends
+        
         # Add Content-Type header to the response
-        response_data = json.dumps(data_to_send)
+        response_data = json.dumps(data_to_sends)
         response = jsonify(response_data)
         response.headers['Content-Type'] = 'application/json'
 
