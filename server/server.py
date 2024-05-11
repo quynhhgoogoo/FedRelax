@@ -64,15 +64,14 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
     testsize = Xtest.shape[0]
     G = knn_graph
 
-    # Initialize data_to_sends as a dictionary
-    data_to_sends = {}
-
-    # Iterate over each node in the graph
+    # Attach models and weights to nodes
     for node_i in G.nodes(data=False):
-        # Initialize list to store neighbor predictions for current node
-        neighbour_predictions = []
-        
-        # Iterate over each neighbor of the current node
+        G.nodes[node_i]["model"] = client_attributes[node_i]["model"]
+        G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]
+
+    # Iterate and share predictions
+    for node_i in G.nodes(data=False):
+        neighbour_lists = []
         for node_j in G.neighbors(node_i):
             # Share predictions with neighbors
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
@@ -85,11 +84,8 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
                 "weight": G.edges[(node_i, node_j)]["weight"]
             }
 
-            # Append data_to_send to the list of neighbor predictions
-            neighbour_predictions.append(data_to_send)
-
-        # Add the list of neighbor predictions to the dictionary with the pod's name as key
-        data_to_sends[node_i] = neighbour_predictions
+            neighbour_lists.append(data_to_send)  # Append data_to_send to the list
+        data_to_sends[node_i] = neighbour_lists
 
     return data_to_sends, G
 
