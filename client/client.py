@@ -2,17 +2,10 @@ import os
 import pickle
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor
-import sys
 import base64
-import random
-import json
 import time
-import subprocess
 from kubernetes import client, config
-import signal
 import sys
-import datetime
-import select
 import requests
 from flask import Flask, request, jsonify
 
@@ -89,41 +82,30 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
 
 
 def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip="server-service", port=3000):
-    try:
-        model_params_encoded = base64.b64encode(pickle.dumps(model_params)).decode('utf-8')
-        coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
+    model_params_encoded = base64.b64encode(pickle.dumps(model_params)).decode('utf-8')
+    coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
 
-        if isinstance(sample_weight, np.ndarray):
-            # Convert sample_weight to a list
-            sample_weight_list = sample_weight.tolist()
-        else:
-            # No conversion needed if it's already a list
-            sample_weight_list = sample_weight
+    if isinstance(sample_weight, np.ndarray):
+        # Convert sample_weight to a list
+        sample_weight_list = sample_weight.tolist()
+    else:
+        # No conversion needed if it's already a list
+        sample_weight_list = sample_weight
 
-        # Create a dictionary containing model parameters, training data, and sample weights
-        client_update = {
-            "pod_name": get_pod_name(),
-            "coords": coords_encoded,
-            "model_params": model_params_encoded,
-            "sample_weight": sample_weight_list,  # Use the converted list
-        }
+    # Create a dictionary containing model parameters, training data, and sample weights
+    client_update = {
+        "pod_name": get_pod_name(),
+        "coords": coords_encoded,
+        "model_params": model_params_encoded,
+        "sample_weight": sample_weight_list,  # Use the converted list
+    }
 
-        # URL of the server endpoint
-        SERVER_URL = f"http://{peer_ip}:{port}/receive_data"
+    # URL of the server endpoint
+    SERVER_URL = f"http://{peer_ip}:{port}/receive_data"
 
-        # Send the data to the server
-        response = requests.post(SERVER_URL, json=client_update)
-
-        if response.status_code == 200:
-            print("Model update sent to server successfully")
-            # Parse the response if needed
-            response_data = response.json()
-            print("Response from server:", response_data)
-        else:
-            print(f"Failed to send model update to server. Status code: {response.status_code}")
-
-    except Exception as e:
-        print(f"Error sending model update to server: {e}")
+    # Send the data to the server
+    response = requests.post(SERVER_URL, json=client_update)
+    return response  # Return the response object
 
 
 def receive_data_from_server(peer_ip="server-service", port=3000):
@@ -151,6 +133,7 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
 
 def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0):
     for i, prediction in enumerate(server_predictions):
+        print(i, prediction)
         # Extract predictions from server
         neighbourpred = server_predictions[i]['neighbourpred']
         Xtest = server_predictions[i]['Xtest']
@@ -188,8 +171,16 @@ if configmap_data:
     # Get sample weights (e.g., set equal weights for all data points)
     sample_weight = np.ones(len(Xtrain))
 
-    # Send model update to the server
-    send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
+    # Retry sending model update to the server until success
+    while True:
+        response = send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
+        if response.status_code == 200:
+            print("Model update sent successfully.")
+            break  # Exit the loop if sending is successful
+        else:
+            print(f"Failed to send model update to server. Status code: {response.status_code}")
+            print("Retrying...")
+            time.sleep(10)  # Wait for a while before retrying
 else:
     print("Error: ConfigMap data not found.")
 

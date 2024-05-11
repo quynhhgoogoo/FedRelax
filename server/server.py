@@ -1,14 +1,14 @@
 from http.client import responses
-import requests
 import pickle
 import json
 import numpy as np
 from sklearn.neighbors import kneighbors_graph
 import base64
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import networkx as nx
 import matplotlib.pyplot as plt
 import datetime
+import time
 
 app = Flask(__name__)
 
@@ -16,6 +16,7 @@ app = Flask(__name__)
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = []
+desired_num_pods = 2
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
@@ -147,16 +148,20 @@ def runFedRelax(client_attributes):
 
 @app.route('/send_data', methods=['POST'])
 def send_data_to_client():
-    try:
-        global data_to_sends
+    global data_to_sends
+    print("Sending neighbour updates to client", data_to_sends)
+
+    while len(data_to_sends) < desired_num_pods:
+        # Wait until data_to_sends has enough data
+        time.sleep(30)
         
+    try:
         # Add Content-Type header to the response
         response_data = json.dumps(data_to_sends)
-        response = jsonify(response_data)
-        response.headers['Content-Type'] = 'application/json'
+        response = Response(response_data, status=200, mimetype='application/json')
 
         print("Sending response:", response)
-        return response, 200
+        return response
 
     except Exception as e:
         print("Error sending data to client:", e)
@@ -171,8 +176,7 @@ def receive_model_update():
         print("Received client attributes", data)
 
         # Process the received JSON data
-        process_client_attributes(data)
-        desired_num_pods = 2
+        process_client_attributes(data)   
         
         # Check if all pods have sent their attributes
         if len(all_client_attributes) == desired_num_pods:
