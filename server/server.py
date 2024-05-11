@@ -15,7 +15,7 @@ app = Flask(__name__)
 # Initialize empty dictionary to store client attributes
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
-data_to_sends = []
+data_to_sends = dict()
 desired_num_pods = 2
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
@@ -64,28 +64,32 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
     testsize = Xtest.shape[0]
     G = knn_graph
 
-    # Attach models and weights to nodes
-    for node_i in G.nodes(data=False):
-        G.nodes[node_i]["model"] = client_attributes[node_i]["model"]
-        G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]
+    # Initialize data_to_sends as a dictionary
+    data_to_sends = {}
 
-    # Iterate and share predictions
-    data_to_send = dict()
+    # Iterate over each node in the graph
     for node_i in G.nodes(data=False):
+        # Initialize list to store neighbor predictions for current node
+        neighbour_predictions = []
+        
+        # Iterate over each neighbor of the current node
         for node_j in G.neighbors(node_i):
             # Share predictions with neighbors
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
 
             # Prepare data to send to the server API
-            neighbour_to_send = {
+            data_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),
                 "testsize": testsize,
                 "weight": G.edges[(node_i, node_j)]["weight"]
             }
-            data_to_send[node_i].append(neighbour_to_send)
 
-        data_to_sends.append(data_to_send)
+            # Append data_to_send to the list of neighbor predictions
+            neighbour_predictions.append(data_to_send)
+
+        # Add the list of neighbor predictions to the dictionary with the pod's name as key
+        data_to_sends[node_i] = neighbour_predictions
 
     return data_to_sends, G
 
