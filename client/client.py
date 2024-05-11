@@ -132,24 +132,28 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
 
 
 def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0):
-    for i, prediction in enumerate(server_predictions):
-        print(i, prediction)
-        # Extract predictions from server
-        neighbourpred = server_predictions[i]['neighbourpred']
-        Xtest = server_predictions[i]['Xtest']
-        testsize = server_predictions[i]['testsize']
-        weight = server_predictions[i]['weight']
-        print(neighbourpred)
+    for client, predictions in server_predictions.items():
+        print(f"Client: {client}")
+        for prediction in predictions:
+            neighbourpred = prediction['neighbourpred']
+            Xtest = prediction['Xtest']
+            testsize = prediction['testsize']
+            weight = prediction['weight']
+            print("Neighbour predictions:", neighbourpred)
 
-        # Augment local dataset by a new dataset obtained from the features of the test set
-        neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
-        ytrain = np.vstack((ytrain, neighbourpred))
-        Xtrain = np.vstack((Xtrain, Xtest))
+            # Augment local dataset by a new dataset obtained from the features of the test set
+            neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+            ytrain = np.vstack((ytrain, neighbourpred))
+            Xtrain = np.vstack((Xtrain, Xtest))
 
-        # Set sample weights of added local dataset according to edge weight of edge i <-> j and GTV regularization parameter
-        sampleweightaug = (regparam * len(ytrain) / testsize)
-        sample_weight = np.vstack(sample_weight, sampleweightaug * weight * np.ones((len(neighbourpred), 1)))
-        print(sample_weight, sampleweightaug)
+            # Set sample weights of added local dataset according to edge weight of edge i <-> j and GTV regularization parameter
+            sampleweightaug = (regparam * len(ytrain) / testsize)
+            sample_weight = np.vstack((sample_weight, sampleweightaug * weight * np.ones((len(neighbourpred), 1))))
+            print(sample_weight, sampleweightaug)
+        
+        # Fit the local model with the augmented dataset and sample weights
+        local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
+        print("Local model has been trained with augmented dataset and sample weights")
     
 
 # TODO: Remove this after replace ConfigMap by Docker Volume
