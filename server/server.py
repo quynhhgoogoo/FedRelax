@@ -148,23 +148,25 @@ def runFedRelax(client_attributes):
 @app.route('/send_data', methods=['POST'])
 def send_data_to_client():
     global data_to_sends
-    print("Sending neighbour updates to client", data_to_sends)
-
-    while len(data_to_sends) < desired_num_pods:
-        # Wait until data_to_sends has enough data
-        time.sleep(30)
+    
+    # Get the client ID from the request headers
+    client_id = request.headers.get('Client-ID')
+    
+    # Check if the client ID is present and valid
+    if client_id in data_to_sends:
+        # Prepare the response data containing only the predictions for the client
+        response_data = json.dumps({client_id: data_to_sends[client_id]})
         
-    try:
         # Add Content-Type header to the response
-        response_data = json.dumps(data_to_sends)
         response = Response(response_data, status=200, mimetype='application/json')
 
         print("Sending response:", response)
         return response
-
-    except Exception as e:
-        print("Error sending data to client:", e)
-        return jsonify({"error": str(e)}), 400
+    else:
+        # If the client ID is not found in data_to_sends, return an error response
+        error_message = f"Client ID '{client_id}' not found in data_to_sends"
+        print("Error sending data to client:", error_message)
+        return jsonify({"error": error_message}), 400
 
 
 @app.route('/receive_data', methods=['POST'])

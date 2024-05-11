@@ -108,10 +108,11 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
     return response  # Return the response object
 
 
-def receive_data_from_server(peer_ip="server-service", port=3000):
+def receive_data_from_server( peer_ip="server-service", port=3000):
+    client_id = get_pod_name()
     SERVER_URL = f"http://{peer_ip}:{port}/send_data"
     try:
-        headers = {'Content-Type': 'application/json'}
+        headers = {'Content-Type': 'application/json', 'Client-ID': client_id}
         response = requests.post(SERVER_URL, headers=headers)
 
         # Check if the request was successful (status code 200)
