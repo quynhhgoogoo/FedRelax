@@ -75,8 +75,7 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
         for node_j in G.neighbors(node_i):
             # Share predictions with neighbors
             neighbourpred = G.nodes[node_j]["model"].predict(Xtest).reshape(-1, 1)
-
-            # Prepare data to send to the server API
+            # Prepare data to send to client
             data_to_send = {
                 "neighbourpred": neighbourpred.tolist(),
                 "Xtest": Xtest.tolist(),

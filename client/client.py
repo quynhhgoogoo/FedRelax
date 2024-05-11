@@ -135,11 +135,11 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
     for client, predictions in server_predictions.items():
         print(f"Client: {client}")
         for prediction in predictions:
-            neighbourpred = prediction['neighbourpred']
-            Xtest = prediction['Xtest']
+            neighbourpred = np.array(prediction['neighbourpred'])
+            Xtest = np.array(prediction['Xtest'])
             testsize = prediction['testsize']
             weight = prediction['weight']
-            print("Neighbour predictions:", neighbourpred)
+            print("Neighbour predictions:", neighbourpred, "Xtest :", Xtest)
 
             # Augment local dataset by a new dataset obtained from the features of the test set
             neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
