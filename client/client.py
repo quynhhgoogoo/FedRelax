@@ -160,6 +160,8 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
 # TODO: Remove this after replace ConfigMap by Docker Volume
 # wait_for_job_completion()
 
+time.sleep(120)
+
 # Get pod name and ConfigMap data
 pod_name = get_pod_name()
 configmap_data = get_configmap_data(pod_name)

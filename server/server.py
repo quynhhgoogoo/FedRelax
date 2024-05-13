@@ -16,7 +16,7 @@ app = Flask(__name__)
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 2
+desired_num_pods = 20
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
