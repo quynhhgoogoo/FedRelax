@@ -87,3 +87,5 @@ minikube addons enable metrics-server
 # Expose pod as service
 # kubectl expose deployment client --port=3000 --target-port=5000 --type=ClusterIP --name=client-service
 # kubectl expose deployment server --port=3000 --target-port=3000 --type=ClusterIP --name=server-service
+
+# kubectl scale --replicas=3 deployment client
