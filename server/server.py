@@ -16,7 +16,7 @@ app = Flask(__name__)
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 20
+desired_num_pods = 5
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
@@ -148,18 +148,20 @@ def runFedRelax(client_attributes):
 @app.route('/send_data', methods=['POST'])
 def send_data_to_client():
     global data_to_sends
-    
-    # Get the client ID from the request headers
     client_id = request.headers.get('Client-ID')
     
     # Check if the client ID is present and valid
     if client_id in data_to_sends:
+        while len(data_to_sends) < desired_num_pods:
+            time.sleep(5) 
+            
+        print("Data to sends on progress", data_to_sends)
         # Prepare the response data containing only the predictions for the client
         response_data = json.dumps({client_id: data_to_sends[client_id]})
         
         # Add Content-Type header to the response
         response = Response(response_data, status=200, mimetype='application/json')
-
+        
         print("Sending response:", response)
         return response
     else:
