@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import base64
 
 # Load the graph object from the pickle file
-G = pickle.load(open('/app/algorithm/QuizGraphLearning.pickle', 'rb'))
+G = pickle.load(open('/app/algorithm/data/QuizGraphLearning.pickle', 'rb'))
 
 for iter_node in G.nodes(): 
     nodefeatures = np.array([np.mean(G.nodes[iter_node]["Xtrain"]),np.mean(G.nodes[iter_node]["ytrain"])])
