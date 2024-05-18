@@ -1,0 +1,17 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client2
+spec:
+  containers:
+  - name: client2-container
+    image: quynhhgoogoo/fed-relax-client:latest
+    volumeMounts:
+    - mountPath: /app/data
+      name: volume2
+  volumes:
+  - name: volume2
+    hostPath:
+      path: /var/lib/docker/volumes/volume2/_data
+      type: Directory
