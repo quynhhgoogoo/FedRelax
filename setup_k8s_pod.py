@@ -22,7 +22,7 @@ metadata:
   name: {pod_name}
 spec:
   containers:
-  - name: {pod_name}-container
+  - name: fedrelax-container-client
     image: quynhhgoogoo/fed-relax-client:latest
     volumeMounts:
     - mountPath: /app/data

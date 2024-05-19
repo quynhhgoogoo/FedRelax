@@ -5,7 +5,7 @@ metadata:
   name: client2
 spec:
   containers:
-  - name: client2-container
+  - name: fedrelax-container-client
     image: quynhhgoogoo/fed-relax-client:latest
     volumeMounts:
     - mountPath: /app/data
