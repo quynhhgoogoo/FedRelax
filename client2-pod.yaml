@@ -12,6 +12,5 @@ spec:
       name: volume2
   volumes:
   - name: volume2
-    hostPath:
-      path: /var/lib/docker/volumes/volume2/_data
-      type: Directory
+    persistentVolumeClaim:
+      claimName: pvc-volume2
