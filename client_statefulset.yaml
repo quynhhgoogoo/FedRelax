@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: client
+  namespace: fed-relax
+spec:
+  serviceName: "client"
+  replicas: 5
+  selector:
+    matchLabels:
+      app: fedrelax-client
+  template:
+    metadata:
+      labels:
+        app: fedrelax-client
+    spec:
+      restartPolicy: Always
+      serviceAccountName: my-service-account
+      containers:
+      - name: fedrelax-container-client
+        image: quynhhgoogoo/fed-relax-client:latest
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DATA_PARTITION
+          value: "partition_$(POD_NAME)"
+        command: ["python3", "-u", "/app/client/test.py", "--data_partition", "$(DATA_PARTITION)"]
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: persistent-data
+          mountPath: /data
+      imagePullSecrets:
+      - name: regcred
+  volumeClaimTemplates:
+  - metadata:
+      name: persistent-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: standard
