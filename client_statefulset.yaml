@@ -14,7 +14,6 @@ spec:
       labels:
         app: fedrelax-client
     spec:
-      restartPolicy: Always
       serviceAccountName: my-service-account
       containers:
       - name: fedrelax-container-client
@@ -24,20 +23,20 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        - name: DATA_PARTITION
-          value: "partition_$(POD_NAME)"
-        command: ["python3", "-u", "/app/client/test.py", "--data_partition", "$(DATA_PARTITION)"]
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 3000
+        command: ["python3", "-u", "/app/load_data.py"]
         volumeMounts:
-        - name: persistent-data
+        - name: data-volume
           mountPath: /data
-      imagePullSecrets:
-      - name: regcred
+      initContainers:
+      - name: init-create-dir
+        image: busybox
+        command: ['sh', '-c', 'mkdir -p /data/partition-${POD_NAME##*-}']
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
   volumeClaimTemplates:
   - metadata:
-      name: persistent-data
+      name: data-volume
     spec:
       accessModes: ["ReadWriteOnce"]
       resources:

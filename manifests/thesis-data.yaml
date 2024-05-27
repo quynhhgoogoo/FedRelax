@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: processor
+spec:
+  selector:
+    matchLabels:
+      app: nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"
+  replicas: 10 # by default is 1
+  minReadySeconds: 10 # by default is 0
+  template:
+    metadata:
+      labels:
+        app: nginx # has to match .spec.selector.matchLabels
+    spec:
+      volumes:
+      - name: input-data
+        hostPath:
+          path: /data/input-data-inside-pod
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nginx
+        env:
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name        
+        image: nginx
+        volumeMounts:
+        - name: input-data
+          mountPath: /pod-data
+          subPathExpr: $(MY_POD_NAME)
+
+# verify mounts
+# kind create cluster --config 1m.3w.config 
+# for i in $(ls -1 algorithm/data/input-data-on-laptop/ | wc -l);do kubectl exec -it processor-$i -- ls /pod-data;done
