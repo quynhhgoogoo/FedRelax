@@ -34,4 +34,4 @@ spec:
 
 # verify mounts
 # kind create cluster --config 1m.3w.config 
-# for i in $(ls -1 algorithm/data/input-data-on-laptop/ | wc -l);do kubectl exec -it processor-$i -- ls /pod-data;done
+# for i in {0..30};do kubectl exec -it processor-$i -- bash -c "hostname; ls /pod-data";done
