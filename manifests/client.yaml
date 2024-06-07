@@ -2,17 +2,18 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: processor
+  namespace: fed-relax
 spec:
   selector:
     matchLabels:
-      app: nginx # has to match .spec.template.metadata.labels
-  serviceName: "nginx"
+      app: fedrelax-client # has to match .spec.template.metadata.labels
+  serviceName: "fedrelax-client"
   replicas: 10 # by default is 1
   minReadySeconds: 10 # by default is 0
   template:
     metadata:
       labels:
-        app: nginx # has to match .spec.selector.matchLabels
+        app: fedrelax-client # has to match .spec.selector.matchLabels
     spec:
       volumes:
       - name: input-data
