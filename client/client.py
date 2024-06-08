@@ -45,42 +45,6 @@ def get_pod_name():
     return pod_name
 
 
-def get_configmap_data(pod_name, namespace="fed-relax"):
-    config.load_incluster_config()
-    v1 = client.CoreV1Api()
-
-    # Get the ConfigMap name associated with the specified pod
-    pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
-    configmap_name = pod.metadata.labels.get("configmap-name")
-
-    if not configmap_name:
-        print(f"Warning: Pod {pod_name} doesn't have a configmap-name label.")
-        return None
-
-    try:
-        # Get the ConfigMap data
-        configmap = v1.read_namespaced_config_map(name=configmap_name, namespace=namespace)
-    except client.rest.ApiException as e:
-        print(f"Error retrieving ConfigMap {configmap_name} for pod {pod_name}: {e}")
-        return None
-
-    # Extract relevant attributes and training data
-    pod_attributes = {
-        "coords": pickle.loads(base64.b64decode(configmap.data["coords"])),
-        "Xtrain": pickle.loads(base64.b64decode(configmap.data["Xtrain"])),
-        "ytrain": pickle.loads(base64.b64decode(configmap.data["ytrain"])),
-        "Xval": pickle.loads(base64.b64decode(configmap.data["Xval"])),
-        "yval": pickle.loads(base64.b64decode(configmap.data["yval"])),
-    }
-
-    if pod_attributes:
-        print(f"Attributes for pod {pod_name}: {pod_attributes}")
-    else:
-        print(f"No attributes found for pod {pod_name}.")
-
-    return pod_attributes
-
-
 def train_local_model(Xtrain, ytrain, max_depth=4):
     model = DecisionTreeRegressor(max_depth=max_depth)
     model.fit(Xtrain, ytrain)
