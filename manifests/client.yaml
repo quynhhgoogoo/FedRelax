@@ -21,13 +21,13 @@ spec:
           path: /data/input-data-inside-pod
       terminationGracePeriodSeconds: 10
       containers:
-      - name: nginx
+      - name: fedrelax-container-client
         env:
           - name: MY_POD_NAME
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name        
-        image: nginx
+        image: quynhhgoogoo/fed-relax-client:latest
         volumeMounts:
         - name: input-data
           mountPath: /pod-data
