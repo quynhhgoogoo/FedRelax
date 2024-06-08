@@ -9,24 +9,30 @@ import sys
 import requests
 from flask import Flask, request, jsonify
 
-def check_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
-    config.load_incluster_config() 
-    api_instance = client.BatchV1Api()
-    try:
-        job = api_instance.read_namespaced_job(job_name, namespace)
-        if job.status.succeeded is not None and job.status.succeeded > 0:
-            return True
-    except Exception as e:
-        print(f"Error checking job status: {str(e)}")
-    return False
-
-
-def wait_for_job_completion(job_name="init-attributes-job", namespace="fed-relax"):
-    while not check_job_completion(job_name, namespace):
-        print(f"Waiting for Job {job_name} to complete...")
-        time.sleep(10)
-    print(f"Job {job_name} completed successfully!")
-
+def load_partitioned_data(data_dir='/pod-data'):
+    # Get the pod's name from the environment variable
+    pod_name = os.environ.get('MY_POD_NAME', 'unknown_pod')
+    
+    # Extract the pod index from the pod's name
+    entries = os.listdir(data_dir)
+    files = [entry for entry in entries if os.path.isfile(os.path.join(data_dir, entry))]
+    data_file = files[0]
+    
+    # Construct the path to the data partition file
+    partition_file = os.path.join(data_dir, data_file)
+    
+    # Check if the partition file exists
+    if not os.path.exists(partition_file):
+        raise FileNotFoundError(f"Partition file not found: {partition_file}")
+    
+    # Load the data from the partition file
+    with open(partition_file, 'rb') as f:
+        data = pickle.load(f)
+    
+    print(f"Successfully loaded data for {pod_name} from {partition_file}")
+    print(data)
+    return data
+    
 
 def get_pod_name():
     # Get the pod name from the environment variable
@@ -159,40 +165,27 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
         local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
         print("Local model has been trained with augmented dataset and sample weights")
         
+data = load_partitioned_data()
+Xtrain = data["Xtrain"]
+ytrain = data["ytrain"]
+coords = data["coords"]
 
-# TODO: Remove this after replace ConfigMap by Docker Volume
-# wait_for_job_completion()
+# Train a local model (replace with your actual model training)
+local_model = train_local_model(Xtrain, ytrain)
 
-#time.sleep(120)
+# Get sample weights (e.g., set equal weights for all data points)
+sample_weight = np.ones(len(Xtrain))
 
-# Get pod name and ConfigMap data
-pod_name = get_pod_name()
-configmap_data = get_configmap_data(pod_name)
-
-# Train local model if data is available
-if configmap_data:
-    Xtrain = configmap_data["Xtrain"]
-    ytrain = configmap_data["ytrain"]
-    coords = configmap_data["coords"]
-
-    # Train a local model (replace with your actual model training)
-    local_model = train_local_model(Xtrain, ytrain)
-
-    # Get sample weights (e.g., set equal weights for all data points)
-    sample_weight = np.ones(len(Xtrain))
-
-    # Retry sending model update to the server until success
-    while True:
-        response = send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
-        if response.status_code == 200:
-            print("Model update sent successfully.")
-            break  # Exit the loop if sending is successful
-        else:
-            print(f"Failed to send model update to server. Status code: {response.status_code}")
-            print("Retrying...")
-            time.sleep(10)  # Wait for a while before retrying
-else:
-    print("Error: ConfigMap data not found.")
+# Retry sending model update to the server until success
+while True:
+    response = send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
+    if response.status_code == 200:
+        print("Model update sent successfully.")
+        break  # Exit the loop if sending is successful
+    else:
+        print(f"Failed to send model update to server. Status code: {response.status_code}")
+        print("Retrying...")
+        time.sleep(10)  # Wait for a while before retrying
 
 
 data_received = False
