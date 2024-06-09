@@ -101,32 +101,36 @@ def receive_data_from_server( peer_ip="server-service", port=3000):
         return None
 
 
-def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0):
-    for client, predictions in server_predictions.items():
-        print(f"Client: {client}")
-        for prediction in predictions:
-            neighbourpred = np.array(prediction['neighbourpred'])
-            Xtest = np.array(prediction['Xtest'])
-            testsize = prediction['testsize']
-            weight = prediction['weight']
-            print("Neighbour predictions:", neighbourpred, "Xtest :", Xtest)
+def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0, maxiter=2):
+    # Repeat the local updates (simultaneously at all nodes) for maxiter iterations
+    for iter_GD in range(maxiter):
+        for client, predictions in server_predictions.items():
+            print(f"Client: {client}")
+            for prediction in predictions:
+                neighbourpred = np.array(prediction['neighbourpred'])
+                Xtest = np.array(prediction['Xtest'])
+                testsize = prediction['testsize']
+                weight = prediction['weight']
+                print("Neighbour predictions:", neighbourpred, "Xtest :", Xtest)
 
-            # Augment local dataset by a new dataset obtained from the features of the test set
-            neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))  # Tile to match num features in ytrain
-            ytrain = np.vstack((ytrain, neighbourpred))
-            Xtrain = np.vstack((Xtrain, Xtest))
+                # Augment local dataset by a new dataset obtained from the features of the test set
+                neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))  # Tile to match num features in ytrain
+                ytrain = np.vstack((ytrain, neighbourpred))
+                Xtrain = np.vstack((Xtrain, Xtest))
 
-            # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
-            sampleweightaug = (regparam * len(ytrain) / testsize)
+                # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
+                sampleweightaug = (regparam * len(ytrain) / testsize)
 
-            # Reshape sample_weight to ensure compatible dimensions for stacking
-            sample_weight_reshaped = sample_weight.reshape(-1, 1)
+                # Reshape sample_weight to ensure compatible dimensions for stacking
+                sample_weight_reshaped = sample_weight.reshape(-1, 1)
 
-            sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * weight * np.ones((len(neighbourpred), 1))))
-        
-        # Fit the local model with the augmented dataset and sample weights
-        local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
-        print("Local model has been trained with augmented dataset and sample weights")
+                sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * weight * np.ones((len(neighbourpred), 1))))
+            
+            # Fit the local model with the augmented dataset and sample weights
+            local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
+            print("Local model has been trained with augmented dataset and sample weights")
+    
+    return local_model
         
 data = load_partitioned_data()
 Xtrain = data["Xtrain"]
