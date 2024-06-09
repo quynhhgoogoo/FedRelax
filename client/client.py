@@ -30,13 +30,12 @@ def load_partitioned_data(data_dir='/pod-data'):
         data = pickle.load(f)
     
     print(f"Successfully loaded data for {pod_name} from {partition_file}")
-    print(data)
     return data
     
 
 def get_pod_name():
     # Get the pod name from the environment variable
-    pod_name = os.environ.get('POD_NAME')
+    pod_name = os.environ.get('MY_POD_NAME')
 
     if pod_name:
         print("Pod name:", pod_name)
