@@ -166,4 +166,8 @@ while not data_received:
     else:
         time.sleep(60)
 
-FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
+model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
+
+# Keep pods alive after procedure
+while True:
+    time.sleep(120)
