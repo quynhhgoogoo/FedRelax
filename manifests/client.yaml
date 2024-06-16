@@ -28,6 +28,7 @@ spec:
               fieldRef:
                 fieldPath: metadata.name        
         image: quynhhgoogoo/fed-relax-client:latest
+        imagePullPolicy: Always
         volumeMounts:
         - name: input-data
           mountPath: /pod-data

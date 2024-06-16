@@ -194,5 +194,30 @@ def receive_model_update():
         return jsonify({"error": str(e)}), 400
 
 
+@app.route('/receive_model', methods=['POST'])
+def receive_final_model():
+    final_models = []
+    try:
+        # Receive data from the client
+        model = request.get_json()
+        final_models.append(model)
+        print("Received client attributes", model)  
+        
+        # Check if all pods have sent their attributes
+        if len(all_client_attributes) == desired_num_pods:
+            
+            # TODO: Perform the data evaluation
+            print(all_client_attributes)
+
+            all_client_attributes.clear()
+
+        # Send the response
+        return jsonify({"message": "Model is evaluated successfully."}), 200
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"error": str(e)}), 400
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)

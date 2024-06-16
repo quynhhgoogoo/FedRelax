@@ -30,13 +30,13 @@ docker tag fed-relax-client quynhhgoogoo/fed-relax-client:latest
 docker push quynhhgoogoo/fed-relax-client:latest
 
 # Provide credentials
-#read -p 'Username: ' uservar
-#read -sp 'Password: ' passvar
-#kubectl create secret docker-registry regcred \
-#    --docker-server='https://hub.docker.com'\
-#    --docker-username= $uservar\
-#    --docker-password= $passvar\
-#    --docker-email='luongdiemquynh1998@gmail.com'
+export uservar='your_dockerhub_username'
+export passvar='your_dockerhub_password'
+kubectl create secret docker-registry regcred \
+    --docker-server=https://hub.docker.com \
+    --docker-username=$uservar \
+    --docker-password=$passvar \
+    --docker-email=luongdiemquynh1998@gmail.com
 
 # Apply rbac with necessary permissions
 kubectl apply -f role.yaml
