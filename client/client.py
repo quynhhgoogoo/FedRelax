@@ -4,7 +4,10 @@ import numpy as np
 from sklearn.tree import DecisionTreeRegressor
 import base64
 import time
+from kubernetes import client, config
+import sys
 import requests
+from flask import Flask, request, jsonify
 
 def load_partitioned_data(data_dir='/pod-data'):
     # Get the pod's name from the environment variable
@@ -28,6 +31,7 @@ def load_partitioned_data(data_dir='/pod-data'):
     
     print(f"Successfully loaded data for {pod_name} from {partition_file}")
     return data
+    
 
 def get_pod_name():
     # Get the pod name from the environment variable
@@ -45,7 +49,8 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     model.fit(Xtrain, ytrain)
     return model
 
-def send_model_update_to_server(coords, model_params, sample_weight, peer_ip="server-service", port=3000):
+
+def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip="server-service", port=3000):
     model_params_encoded = base64.b64encode(pickle.dumps(model_params)).decode('utf-8')
     coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
 
@@ -61,7 +66,7 @@ def send_model_update_to_server(coords, model_params, sample_weight, peer_ip="se
         "pod_name": get_pod_name(),
         "coords": coords_encoded,
         "model_params": model_params_encoded,
-        "sample_weight": sample_weight_list,
+        "sample_weight": sample_weight_list,  # Use the converted list
     }
 
     # URL of the server endpoint
@@ -69,28 +74,11 @@ def send_model_update_to_server(coords, model_params, sample_weight, peer_ip="se
 
     # Send the data to the server
     response = requests.post(SERVER_URL, json=client_update)
-    return response
+    print("Model update is sent to server", response)
+    return response  # Return the response object
 
-def send_final_model_to_server(model, peer_ip="server-service", port=3000):
-    model_serialized = pickle.dumps(model)
-    model_encoded = base64.b64encode(model_serialized).decode('utf-8')
 
-    client_update = {
-        "pod_name": get_pod_name(),
-        "model": model_encoded,
-    }
-
-    SERVER_URL = f"http://{peer_ip}:{port}/receive_model"
-
-    try:
-        response = requests.post(SERVER_URL, json=client_update)
-        response.raise_for_status()
-        return response
-    except requests.exceptions.RequestException as e:
-        print(f"Failed to send model to server: {e}")
-        return None
-
-def receive_data_from_server(peer_ip="server-service", port=3000):
+def receive_data_from_server( peer_ip="server-service", port=3000):
     client_id = get_pod_name()
     SERVER_URL = f"http://{peer_ip}:{port}/send_data"
     try:
@@ -109,6 +97,7 @@ def receive_data_from_server(peer_ip="server-service", port=3000):
             return None
 
     except Exception as e:
+        # Print an error message if an exception occurs
         print(f"Error receiving data from server: {e}")
         return None
 
@@ -125,7 +114,8 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
                 weight = prediction['weight']
                 print("Neighbour predictions:", neighbourpred, "Xtest :", Xtest)
 
-                neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+                # Augment local dataset by a new dataset obtained from the features of the test set
+                neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))  # Tile to match num features in ytrain
                 ytrain = np.vstack((ytrain, neighbourpred))
                 Xtrain = np.vstack((Xtrain, Xtest))
 
@@ -142,7 +132,7 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
             print("Local model has been trained with augmented dataset and sample weights")
     
     return local_model
-
+        
 data = load_partitioned_data()
 Xtrain = data["Xtrain"]
 ytrain = data["ytrain"]
@@ -156,14 +146,15 @@ sample_weight = np.ones(len(Xtrain))
 
 # Retry sending model update to the server until success
 while True:
-    response = send_model_update_to_server(coords, local_model.get_params(), sample_weight)
+    response = send_model_update_to_server(coords, local_model, Xtrain, ytrain, sample_weight)
     if response.status_code == 200:
         print("Model update sent successfully.")
-        break
+        break  # Exit the loop if sending is successful
     else:
         print(f"Failed to send model update to server. Status code: {response.status_code}")
         print("Retrying...")
-        time.sleep(10)
+        time.sleep(10)  # Wait for a while before retrying
+
 
 data_received = False
 
@@ -176,14 +167,8 @@ while not data_received:
     else:
         time.sleep(60)
 
-final_model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
-response = send_final_model_to_server(final_model)
-if response:
-    print("Final model is sent successfully.")
-else:
-    print("Failed to send final model.")
+model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
 
 # Keep pods alive after procedure
 while True:
     time.sleep(120)
-    

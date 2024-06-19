@@ -1,3 +1,4 @@
+from http import client
 from http.client import responses
 import pickle
 import json
@@ -16,9 +17,9 @@ app = Flask(__name__)
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 10
+desired_num_pods = 5
 
-def add_edges_k8s(clients_attributes, nrneighbors=3):
+def add_edges_k8s(clients_attributes, nrneighbors=2):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -60,17 +61,19 @@ def decode_and_unpickle(encoded_data):
 
 
 def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regparam=0, maxiter=100):
+    global data_to_sends
+    
     # Determine the number of data points in the test set
     testsize = Xtest.shape[0]
     G = knn_graph
 
     # Attach models and weights to nodes
-    for node_i in G.nodes(data=False):
+    for node_i in G.nodes:
         G.nodes[node_i]["model"] = client_attributes[node_i]["model"]
         G.nodes[node_i]["sample_weight"] = client_attributes[node_i]["sample_weight"]
 
     # Iterate and share predictions
-    for node_i in G.nodes(data=False):
+    for node_i in G.nodes:
         neighbour_lists = []
         for node_j in G.neighbors(node_i):
             # Share predictions with neighbors
@@ -85,6 +88,7 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
 
             neighbour_lists.append(data_to_send)  # Append data_to_send to the list
         data_to_sends[node_i] = neighbour_lists
+        print("FedRelax returns", data_to_sends)
 
     return data_to_sends, G
 
@@ -150,12 +154,13 @@ def send_data_to_client():
     global data_to_sends
     client_id = request.headers.get('Client-ID')
     
+    while len(data_to_sends) < desired_num_pods:
+        time.sleep(5) 
+
     # Check if the client ID is present and valid
     if client_id in data_to_sends:
-        while len(data_to_sends) < desired_num_pods:
-            time.sleep(5) 
-            
-        print("Data to sends on progress", data_to_sends)
+        print("Data to sends on progress", data_to_sends, "Data is sent to", client_id)
+        print(data_to_sends[client_id])
         # Prepare the response data containing only the predictions for the client
         response_data = json.dumps({client_id: data_to_sends[client_id]})
         
@@ -168,6 +173,7 @@ def send_data_to_client():
         # If the client ID is not found in data_to_sends, return an error response
         error_message = f"Client ID '{client_id}' not found in data_to_sends"
         print("Error sending data to client:", error_message)
+        print("Data_to_sends is: ", data_to_sends)
         return jsonify({"error": error_message}), 400
 
 
@@ -188,31 +194,6 @@ def receive_model_update():
 
         # Send the response
         return jsonify({"message": "Data processed successfully."}), 200
-
-    except Exception as e:
-        print("Error:", e)
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route('/receive_model', methods=['POST'])
-def receive_final_model():
-    final_models = []
-    try:
-        # Receive data from the client
-        model = request.get_json()
-        final_models.append(model)
-        print("Received client attributes", model)  
-        
-        # Check if all pods have sent their attributes
-        if len(all_client_attributes) == desired_num_pods:
-            
-            # TODO: Perform the data evaluation
-            print(all_client_attributes)
-
-            all_client_attributes.clear()
-
-        # Send the response
-        return jsonify({"message": "Model is evaluated successfully."}), 200
 
     except Exception as e:
         print("Error:", e)
