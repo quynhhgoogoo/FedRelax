@@ -17,9 +17,9 @@ app = Flask(__name__)
 all_client_attributes = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 5
+desired_num_pods = 2
 
-def add_edges_k8s(clients_attributes, nrneighbors=2):
+def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -199,6 +199,29 @@ def receive_model_update():
         print("Error:", e)
         return jsonify({"error": str(e)}), 400
 
+@app.route('/receive_model', methods=['POST'])
+def receive_final_model():
+    final_models = []
+    try:
+        # Receive data from the client
+        model = request.get_json()
+        final_models.append(model)
+        print("Received client attributes", model)  
+        
+        # Check if all pods have sent their attributes
+        if len(all_client_attributes) == desired_num_pods:
+            
+            # TODO: Perform the data evaluation
+            print(all_client_attributes)
+
+            all_client_attributes.clear()
+
+        # Send the response
+        return jsonify({"message": "Model is evaluated successfully."}), 200
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)

@@ -78,6 +78,26 @@ def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_wei
     return response  # Return the response object
 
 
+def send_final_model_to_server(model, peer_ip="server-service", port=3000):
+    model_serialized = pickle.dumps(model)
+    model_encoded = base64.b64encode(model_serialized).decode('utf-8')
+
+    client_update = {
+        "pod_name": get_pod_name(),
+        "model": model_encoded,
+    }
+
+    SERVER_URL = f"http://{peer_ip}:{port}/receive_model"
+
+    try:
+        response = requests.post(SERVER_URL, json=client_update)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to send model to server: {e}")
+        return None
+
+
 def receive_data_from_server( peer_ip="server-service", port=3000):
     client_id = get_pod_name()
     SERVER_URL = f"http://{peer_ip}:{port}/send_data"
@@ -167,7 +187,13 @@ while not data_received:
     else:
         time.sleep(60)
 
-model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
+final_model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0)
+
+response = send_final_model_to_server(final_model)
+if response:
+    print("Final model is sent successfully.")
+else:
+    print("Failed to send final model.")
 
 # Keep pods alive after procedure
 while True:
