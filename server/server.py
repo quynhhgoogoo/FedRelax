@@ -15,6 +15,8 @@ app = Flask(__name__)
 
 # Initialize empty dictionary to store client attributes
 all_client_attributes = {}
+# Initialize empty dictionary to store client models
+all_client_models = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
 desired_num_pods = 2
@@ -134,6 +136,36 @@ def process_client_attributes(client_update):
     # Log information about received update with timestamp
     with open("server_logs.txt", "a") as log_file:
         log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
+
+
+def process_local_models(client_update):
+    global all_client_models
+    
+    # Receive client update
+    pod_name = client_update['pod_name']
+
+    # Decode model parameters, sample weights, coords
+    val_features = decode_and_unpickle(client_update['val_features'])
+    val_labels = client_update['val_labels']
+    trainerr = decode_and_unpickle(client_update['trainerr'])
+    valerr = decode_and_unpickle(client_update['valerr'])
+
+    print(f"Received update from pod: {pod_name} with {val_features}, {val_features}, {trainerr}, {valerr}")
+
+    # Update node information in the graph
+    pod_attributes = {
+        "val_features": val_features,
+        "val_labels": val_labels,
+        "trainerr": trainerr,
+        "valerr": valerr
+    }
+    
+    # Add the attributes to the global dictionary
+    all_client_models[pod_name] = pod_attributes
+
+    # Log information about received update with timestamp
+    with open("server_logs.txt", "a") as log_file:
+        log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
             
 
 # Trigger global model update after receiving updates from all clients
@@ -201,18 +233,28 @@ def receive_model_update():
 
 @app.route('/receive_model', methods=['POST'])
 def receive_final_model():
-    final_models = []
     try:
         # Receive data from the client
-        model = request.get_json()
-        final_models.append(model)
-        print("Received client attributes", model)  
+        model_data = request.get_json()
+
+        process_local_models (model_data)
         
         # Check if all pods have sent their attributes
-        if len(all_client_attributes) == desired_num_pods:
+        if len(all_client_models) == desired_num_pods:
             
             # TODO: Perform the data evaluation
-            print(all_client_attributes)
+            X_val = all_client_models[0]["Xval"]
+            y_1 = all_client_models[0]["model"].predict(X_val)
+            y_2 = all_client_models[0]["model"].predict(X_val)
+
+            # Plot the results
+            plt.figure()
+            plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
+            plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
+            plt.plot(all_client_models[1]["Xval"], all_client_models[1]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+            plt.plot(all_client_models[1]["Xval"], all_client_models[1]["yval"], color="red", label="val data second cluster", linewidth=2)
+            plt.savefig('/app/validation.png')  # Save the image to a file
+            print(f"Validation graph is successfully saved in /app/validation.png")
 
             all_client_attributes.clear()
 
