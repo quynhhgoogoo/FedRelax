@@ -98,7 +98,7 @@ def send_evaluations_to_server(trained_local_model, train_features, train_labels
     }
 
     # URL of the server endpoint
-    SERVER_URL = f"http://{peer_ip}:{port}/receive_data"
+    SERVER_URL = f"http://{peer_ip}:{port}/receive_model"
 
     # Send the data to the server
     response = requests.post(SERVER_URL, json=model_update)

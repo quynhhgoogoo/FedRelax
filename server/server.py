@@ -236,6 +236,7 @@ def receive_final_model():
     try:
         # Receive data from the client
         model_data = request.get_json()
+        print("Received local model updates", model_data)
 
         process_local_models (model_data)
         
