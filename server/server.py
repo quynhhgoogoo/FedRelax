@@ -10,6 +10,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import datetime
 import time
+import logging
 
 app = Flask(__name__)
 
@@ -90,7 +91,6 @@ def FedRelax(Xtest, knn_graph, client_attributes, namespace="fed-relax", regpara
 
             neighbour_lists.append(data_to_send)  # Append data_to_send to the list
         data_to_sends[node_i] = neighbour_lists
-        print("FedRelax returns", data_to_sends)
 
     return data_to_sends, G
 
@@ -144,16 +144,18 @@ def process_local_models(client_update):
     # Receive client update
     pod_name = client_update['pod_name']
 
-    # Decode model parameters, sample weights, coords
+    # Decode attributes
+    model = decode_and_unpickle(client_update['model'])
     val_features = decode_and_unpickle(client_update['val_features'])
     val_labels = client_update['val_labels']
     trainerr = decode_and_unpickle(client_update['trainerr'])
     valerr = decode_and_unpickle(client_update['valerr'])
 
-    print(f"Received update from pod: {pod_name} with {val_features}, {val_features}, {trainerr}, {valerr}")
+    print(f"Received local model from pod: {pod_name} with {model}, {val_features}, {val_features}, {trainerr}, {valerr}")
 
     # Update node information in the graph
     pod_attributes = {
+        "model": model,
         "val_features": val_features,
         "val_labels": val_labels,
         "trainerr": trainerr,
@@ -176,7 +178,6 @@ def runFedRelax(client_attributes):
     print("Graph after being fully updated", client_attributes)
     knn_graph = add_edges_k8s(client_attributes)
     visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
-    # TODO: Modify aggregate_updates by using FedRelax
     data,final_graph = FedRelax(Xtest, knn_graph, client_attributes)
     visualize_and_save_graph(final_graph, '/app/fin_graph.png')
 
@@ -191,8 +192,7 @@ def send_data_to_client():
 
     # Check if the client ID is present and valid
     if client_id in data_to_sends:
-        print("Data to sends on progress", data_to_sends, "Data is sent to", client_id)
-        print(data_to_sends[client_id])
+        print("Data is sent to", client_id, data_to_sends[client_id])
         # Prepare the response data containing only the predictions for the client
         response_data = json.dumps({client_id: data_to_sends[client_id]})
         
@@ -205,7 +205,6 @@ def send_data_to_client():
         # If the client ID is not found in data_to_sends, return an error response
         error_message = f"Client ID '{client_id}' not found in data_to_sends"
         print("Error sending data to client:", error_message)
-        print("Data_to_sends is: ", data_to_sends)
         return jsonify({"error": error_message}), 400
 
 
@@ -227,9 +226,14 @@ def receive_model_update():
         # Send the response
         return jsonify({"message": "Data processed successfully."}), 200
 
+    except ValueError as ve:
+        logging.error(f"ValueError: {ve}")
+        return jsonify({"error": str(ve)}), 400
+
     except Exception as e:
-        print("Error:", e)
-        return jsonify({"error": str(e)}), 400
+        print("UnexpectedError:", e)
+        logging.error("UnexpectedError:", e)
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/receive_model', methods=['POST'])
 def receive_final_model():
@@ -238,7 +242,7 @@ def receive_final_model():
         model_data = request.get_json()
         print("Received local model updates", model_data)
 
-        process_local_models (model_data)
+        process_local_models(model_data)
         
         # Check if all pods have sent their attributes
         if len(all_client_models) == desired_num_pods:
@@ -267,4 +271,5 @@ def receive_final_model():
         return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     app.run(host='0.0.0.0', port=3000)

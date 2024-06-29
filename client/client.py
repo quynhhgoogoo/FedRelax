@@ -83,6 +83,7 @@ def send_evaluations_to_server(trained_local_model, train_features, train_labels
     valerr = mean_squared_error(val_labels, trained_local_model.predict(val_features))
 
     # Send evaluation parameters to server
+    trained_local_model_encoded = base64.b64encode(pickle.dumps(trained_local_model)).decode('utf-8')
     val_features_encoded = base64.b64encode(pickle.dumps(val_features)).decode('utf-8')
     val_labels_encoded = base64.b64encode(pickle.dumps(val_labels)).decode('utf-8')
     trainerr_encoded = base64.b64encode(pickle.dumps(trainerr)).decode('utf-8')
@@ -91,6 +92,7 @@ def send_evaluations_to_server(trained_local_model, train_features, train_labels
     # Create a dictionary containing evaluation data
     model_update = {
         "pod_name": get_pod_name(),
+        "model": trained_local_model_encoded,
         "val_features": val_features_encoded,
         "val_labels": val_labels_encoded,
         "trainerr": trainerr_encoded,
@@ -102,7 +104,7 @@ def send_evaluations_to_server(trained_local_model, train_features, train_labels
 
     # Send the data to the server
     response = requests.post(SERVER_URL, json=model_update)
-    print("Model update is sent to server", response)
+    print("Final model is sent to server", response)
     return response
 
 
@@ -203,10 +205,10 @@ final_model = FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, 
 while True:
     response = send_evaluations_to_server(final_model, Xtrain, ytrain, Xval, yval)
     if response.status_code == 200:
-        print("Local model evaluation sent successfully.")
+        print("Final model sent successfully.")
         break 
     else:
-        print(f"Failed to send model update to server. Status code: {response.status_code}")
+        print(f"Failed to send final model to server. Status code: {response.status_code}")
         print("Retrying...")
         time.sleep(10) 
 
