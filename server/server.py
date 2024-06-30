@@ -2,6 +2,7 @@ from http import client
 from http.client import responses
 import pickle
 import json
+from tokenize import Triple
 import numpy as np
 from sklearn.neighbors import kneighbors_graph
 import base64
@@ -272,4 +273,4 @@ def receive_final_model():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    app.run(host='0.0.0.0', port=3000)
+    app.run(host='0.0.0.0', port=3000, threaded=True)

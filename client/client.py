@@ -166,8 +166,8 @@ def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0
 data = load_partitioned_data()
 Xtrain = data["Xtrain"]
 ytrain = data["ytrain"]
-Xval = data["Xtrain"]
-yval = data["ytrain"]
+Xval = data["Xval"]
+yval = data["yval"]
 coords = data["coords"]
 
 # Train a local model (replace with your actual model training)
