@@ -4,10 +4,11 @@ import numpy as np
 from sklearn.tree import DecisionTreeRegressor
 import base64
 import time
-from kubernetes import client, config
-import sys
 import requests
 from sklearn.metrics import mean_squared_error
+import logging
+
+logger = logging.getLogger(__name__)
 
 def load_partitioned_data(data_dir='/pod-data'):
     # Get the pod's name from the environment variable
@@ -51,31 +52,40 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
 
 
 def send_model_update_to_server(coords, model_params, Xtrain, ytrain, sample_weight, peer_ip="server-service", port=3000):
-    model_params_encoded = base64.b64encode(pickle.dumps(model_params)).decode('utf-8')
-    coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
+    try:
+        model_params_encoded = base64.b64encode(pickle.dumps(model_params)).decode('utf-8')
+        coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
 
-    if isinstance(sample_weight, np.ndarray):
-        # Convert sample_weight to a list
-        sample_weight_list = sample_weight.tolist()
-    else:
-        # No conversion needed if it's already a list
-        sample_weight_list = sample_weight
+        if isinstance(sample_weight, np.ndarray):
+            # Convert sample_weight to a list
+            sample_weight_list = sample_weight.tolist()
+        else:
+            # No conversion needed if it's already a list
+            sample_weight_list = sample_weight
 
-    # Create a dictionary containing model parameters, training data, and sample weights
-    client_update = {
-        "pod_name": get_pod_name(),
-        "coords": coords_encoded,
-        "model_params": model_params_encoded,
-        "sample_weight": sample_weight_list,  # Use the converted list
-    }
+        # Create a dictionary containing model parameters, training data, and sample weights
+        client_update = {
+            "pod_name": get_pod_name(),
+            "coords": coords_encoded,
+            "model_params": model_params_encoded,
+            "sample_weight": sample_weight_list,  # Use the converted list
+        }
 
-    # URL of the server endpoint
-    SERVER_URL = f"http://{peer_ip}:{port}/receive_data"
+        # URL of the server endpoint
+        SERVER_URL = f"http://{peer_ip}:{port}/receive_data"
 
-    # Send the data to the server
-    response = requests.post(SERVER_URL, json=client_update)
-    print("Model update is sent to server", response)
-    return response  # Return the response object
+        # Send the data to the server
+        response = requests.post(SERVER_URL, json=client_update)
+        if response.status_code == 200:
+            logger.info("Model update sent successfully.")
+        else:
+            logger.error("Failed to send model update. Status code: %s", response.status_code)
+
+        return response  # Return the response object
+
+    except Exception as e:
+        logger.error("Error sending model update to server: %s", e)
+        return None
 
 
 def send_evaluations_to_server(trained_local_model, train_features, train_labels, val_features, val_labels, peer_ip="server-service", port=3000):

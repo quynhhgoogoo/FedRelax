@@ -12,8 +12,11 @@ import matplotlib.pyplot as plt
 import datetime
 import time
 import logging
+import threading
+import traceback
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Initialize empty dictionary to store client attributes
 all_client_attributes = {}
@@ -21,7 +24,11 @@ all_client_attributes = {}
 all_client_models = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 2
+desired_num_pods = 3
+
+# Initialize locks for thread safety
+attributes_lock = threading.Lock()
+models_lock = threading.Lock()
 
 def add_edges_k8s(clients_attributes, nrneighbors=1):
     """
@@ -115,60 +122,72 @@ def decode_and_unpickle(encoded_data):
 def process_client_attributes(client_update):
     global all_client_attributes
     
-    # Receive client update
-    pod_name = client_update['pod_name']
+    try:
+        # Receive client update
+        pod_name = client_update['pod_name']
 
-    # Decode model parameters, sample weights, coords
-    model_params = decode_and_unpickle(client_update['model_params'])
-    sample_weight = client_update['sample_weight']  # No need to decode sample_weight
-    coords = decode_and_unpickle(client_update['coords'])
-    print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}, {coords}")
+        # Decode model parameters, sample weights, coords
+        model_params = decode_and_unpickle(client_update['model_params'])
+        sample_weight = client_update['sample_weight']  # No need to decode sample_weight
+        coords = decode_and_unpickle(client_update['coords'])
+        print(f"Received update from pod: {pod_name} with {model_params}, {sample_weight}, {coords}")
 
-    # Update node information in the graph
-    pod_attributes = {
-        "coords": coords,
-        "model": model_params,
-        "sample_weight": sample_weight
-    }
-    
-    # Add the attributes to the global dictionary
-    all_client_attributes[pod_name] = pod_attributes
+        # Update node information in the graph
+        pod_attributes = {
+            "coords": coords,
+            "model": model_params,
+            "sample_weight": sample_weight
+        }
+        
+        with attributes_lock:
+            # Add the attributes to the global dictionary
+            all_client_attributes[pod_name] = pod_attributes
 
-    # Log information about received update with timestamp
-    with open("server_logs.txt", "a") as log_file:
-        log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
+        # Log information about received update with timestamp
+        with open("server_logs.txt", "a") as log_file:
+            log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
+
+    except Exception as e:
+        app.logger.error("Error processing client attributes: %s", e)
+        return jsonify({"error": "An error occurred while processing client attributes"}), 500
 
 
 def process_local_models(client_update):
     global all_client_models
     
-    # Receive client update
-    pod_name = client_update['pod_name']
+    try:
+        # Receive client update
+        pod_name = client_update['pod_name']
 
-    # Decode attributes
-    model = decode_and_unpickle(client_update['model'])
-    val_features = decode_and_unpickle(client_update['val_features'])
-    val_labels = client_update['val_labels']
-    trainerr = decode_and_unpickle(client_update['trainerr'])
-    valerr = decode_and_unpickle(client_update['valerr'])
+        # Decode attributes
+        model = decode_and_unpickle(client_update['model'])
+        val_features = decode_and_unpickle(client_update['val_features'])
+        val_labels = client_update['val_labels']
+        trainerr = decode_and_unpickle(client_update['trainerr'])
+        valerr = decode_and_unpickle(client_update['valerr'])
 
-    print(f"Received local model from pod: {pod_name} with {model}, {val_features}, {val_features}, {trainerr}, {valerr}")
+        print(f"Received local model from pod: {pod_name} with {model}, {val_features}, {val_features}, {trainerr}, {valerr}")
 
-    # Update node information in the graph
-    pod_attributes = {
-        "model": model,
-        "val_features": val_features,
-        "val_labels": val_labels,
-        "trainerr": trainerr,
-        "valerr": valerr
-    }
-    
-    # Add the attributes to the global dictionary
-    all_client_models[pod_name] = pod_attributes
+        # Update node information in the graph
+        pod_attributes = {
+            "model": model,
+            "val_features": val_features,
+            "val_labels": val_labels,
+            "trainerr": trainerr,
+            "valerr": valerr
+        }
+        
+        with models_lock:
+            # Add the attributes to the global dictionary
+            all_client_models[pod_name] = pod_attributes
 
-    # Log information about received update with timestamp
-    with open("server_logs.txt", "a") as log_file:
-        log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
+        # Log information about received update with timestamp
+        with open("server_logs.txt", "a") as log_file:
+            log_file.write(f"Received update from pod: {pod_name} at {datetime.datetime.now()}\n")
+
+    except Exception as e:
+        app.logger.error("Error processing client attributes: %s", e)
+        return jsonify({"error": "An error occurred while processing client attributes"}), 500
             
 
 # Trigger global model update after receiving updates from all clients
@@ -214,7 +233,7 @@ def receive_model_update():
     try:
         # Receive data from the client
         data = request.get_json()
-        print("Received client attributes", data)
+        app.logger.debug("Received client attributes %s", data)
 
         # Process the received JSON data
         process_client_attributes(data)   
@@ -233,7 +252,8 @@ def receive_model_update():
 
     except Exception as e:
         print("UnexpectedError:", e)
-        logging.error("UnexpectedError:", e)
+        app.logger.error("UnexpectedError: %s", e)
+        app.logger.error(traceback.format_exc())
         return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/receive_model', methods=['POST'])
