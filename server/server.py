@@ -114,6 +114,25 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
+def model_evaluation():
+    print("Generate model evaluation graph")
+    global all_client_models
+
+    print(all_client_models.keys())
+    X_val = all_client_models["processor-0"]["Xval"]
+    y_1 = all_client_models["processor-0"]["model"].predict(X_val)
+    y_2 = all_client_models["processor-0"]["model"].predict(X_val)
+
+    # Plot the results
+    plt.figure()
+    plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
+    plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_models["processor-1"]["Xval"], all_client_models["processor-1"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_models["processor-1"]["Xval"], all_client_models["processor-1"]["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.savefig('/app/validation.png')  # Save the image to a file
+    print(f"Validation graph is successfully saved in /app/validation.png")
+
+
 def decode_and_unpickle(encoded_data):
     decoded_data = base64.b64decode(encoded_data)
     unpickled_data = pickle.loads(decoded_data)
@@ -171,8 +190,8 @@ def process_local_models(client_update):
         # Update node information in the graph
         pod_attributes = {
             "model": model,
-            "val_features": val_features,
-            "val_labels": val_labels,
+            "Xval": val_features,
+            "yval": val_labels,
             "trainerr": trainerr,
             "valerr": valerr
         }
@@ -266,23 +285,9 @@ def receive_final_model():
         process_local_models(model_data)
         
         # Check if all pods have sent their attributes
-        if len(all_client_models) == desired_num_pods:
-            
-            # TODO: Perform the data evaluation
-            X_val = all_client_models[0]["Xval"]
-            y_1 = all_client_models[0]["model"].predict(X_val)
-            y_2 = all_client_models[0]["model"].predict(X_val)
-
-            # Plot the results
-            plt.figure()
-            plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
-            plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-            plt.plot(all_client_models[1]["Xval"], all_client_models[1]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-            plt.plot(all_client_models[1]["Xval"], all_client_models[1]["yval"], color="red", label="val data second cluster", linewidth=2)
-            plt.savefig('/app/validation.png')  # Save the image to a file
-            print(f"Validation graph is successfully saved in /app/validation.png")
-
-            all_client_attributes.clear()
+        if len(all_client_models) == desired_num_pods:           
+            model_evaluation()
+            all_client_models.clear()
 
         # Send the response
         return jsonify({"message": "Model is evaluated successfully."}), 200
