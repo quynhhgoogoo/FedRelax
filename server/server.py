@@ -119,14 +119,6 @@ def model_evaluation():
     global all_client_models
 
     X_val = all_client_models["processor-1"]["Xval"]
-
-    # Check if model is fitted
-    #print("Model type:", type(all_client_models["processor-0"]["model"]))
-    #if hasattr(all_client_models["processor-1"]["model"], "tree_"):
-    #    print("Model is fitted.")
-    #else:
-    #    print("Model is not fitted.")
-
     y_1 = all_client_models["processor-0"]["model"].predict(X_val)
     y_2 = all_client_models["processor-1"]["model"].predict(X_val)
 
@@ -188,7 +180,7 @@ def process_local_models(client_update):
         # Decode attributes
         model = decode_and_unpickle(client_update['model'])
         val_features = decode_and_unpickle(client_update['val_features'])
-        val_labels = client_update['val_labels']
+        val_labels = decode_and_unpickle(client_update['val_labels'])
         trainerr = decode_and_unpickle(client_update['trainerr'])
         valerr = decode_and_unpickle(client_update['valerr'])
 
