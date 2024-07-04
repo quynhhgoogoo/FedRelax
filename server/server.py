@@ -118,18 +118,25 @@ def model_evaluation():
     print("Generate model evaluation graph")
     global all_client_models
 
-    print(all_client_models.keys())
-    X_val = all_client_models["processor-0"]["Xval"]
+    X_val = all_client_models["processor-1"]["Xval"]
+
+    # Check if model is fitted
+    #print("Model type:", type(all_client_models["processor-0"]["model"]))
+    #if hasattr(all_client_models["processor-1"]["model"], "tree_"):
+    #    print("Model is fitted.")
+    #else:
+    #    print("Model is not fitted.")
+
     y_1 = all_client_models["processor-0"]["model"].predict(X_val)
-    y_2 = all_client_models["processor-0"]["model"].predict(X_val)
+    y_2 = all_client_models["processor-1"]["model"].predict(X_val)
 
     # Plot the results
     plt.figure()
     plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
     plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_models["processor-1"]["Xval"], all_client_models["processor-1"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_models["processor-1"]["Xval"], all_client_models["processor-1"]["yval"], color="red", label="val data second cluster", linewidth=2)
-    plt.savefig('/app/validation.png')  # Save the image to a file
+    plt.plot(all_client_models["processor-2"]["Xval"], all_client_models["processor-1"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_models["processor-0"]["Xval"], all_client_models["processor-1"]["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.savefig('/app/validation.png')
     print(f"Validation graph is successfully saved in /app/validation.png")
 
 
