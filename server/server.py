@@ -24,7 +24,7 @@ all_client_attributes = {}
 all_client_models = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 10
+desired_num_pods = 20
 
 # Initialize locks for thread safety
 attributes_lock = threading.Lock()
@@ -130,16 +130,16 @@ def model_evaluation():
 
     print("Generate model evaluation graph")
 
-    X_val = all_client_models["processor-1"]["Xval"]
-    y_1 = all_client_models["processor-0"]["model"].predict(X_val)
-    y_2 = all_client_models["processor-1"]["model"].predict(X_val)
+    X_val = all_client_models["processor-0"]["Xval"]
+    y_1 = all_client_models["processor-11"]["model"].predict(X_val)
+    y_2 = all_client_models["processor-5"]["model"].predict(X_val)
 
     # Plot the results
     plt.figure()
     plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
     plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_models["processor-2"]["Xval"], all_client_models["processor-1"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_models["processor-0"]["Xval"], all_client_models["processor-1"]["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.plot(all_client_models["processor-7"]["Xval"], all_client_models["processor-0"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_models["processor-15"]["Xval"], all_client_models["processor-11"]["yval"], color="red", label="val data second cluster", linewidth=2)
     plt.savefig('/app/validation.png')
     print(f"Validation graph is successfully saved in /app/validation.png")
 

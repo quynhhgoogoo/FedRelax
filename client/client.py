@@ -142,7 +142,7 @@ def receive_data_from_server( peer_ip="server-service", port=3000):
         return None
 
 
-def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0, maxiter=2):
+def FedRelaxClient(server_predictions, Xtrain, ytrain, sample_weight, regparam=0, maxiter=100):
     # Repeat the local updates (simultaneously at all nodes) for maxiter iterations
     for iter_GD in range(maxiter):
         for client, predictions in server_predictions.items():

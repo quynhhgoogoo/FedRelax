@@ -8,7 +8,7 @@ spec:
     matchLabels:
       app: fedrelax-client # has to match .spec.template.metadata.labels
   serviceName: "fedrelax-client"
-  replicas: 10 # by default is 1
+  replicas: 20 # by default is 1
   minReadySeconds: 10 # by default is 0
   template:
     metadata:
