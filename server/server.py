@@ -115,8 +115,20 @@ def visualize_and_save_graph(graph, output_path):
 
 
 def model_evaluation():
-    print("Generate model evaluation graph")
     global all_client_models
+    
+    print("Calculate training and validaiton errors")
+    train_errors, val_errors = [],[]
+    
+    for processor_id, attributes in all_client_models.items():
+        train_error, val_error = attributes["trainerr"], attributes["valerr"]
+        train_errors.append(train_error)
+        val_errors.append(val_error)
+    
+    print("Average train error:", sum(train_errors) / len(all_client_models))
+    print("Average validation error:", sum(val_errors) / len(all_client_models))
+
+    print("Generate model evaluation graph")
 
     X_val = all_client_models["processor-1"]["Xval"]
     y_1 = all_client_models["processor-0"]["model"].predict(X_val)
