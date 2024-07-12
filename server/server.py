@@ -24,7 +24,7 @@ all_client_attributes = {}
 all_client_models = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 3
+desired_num_pods = 10
 
 # Initialize locks for thread safety
 attributes_lock = threading.Lock()
@@ -119,7 +119,7 @@ def model_evaluation():
     
     print("Calculate training and validaiton errors")
     train_errors, val_errors = [],[]
-    
+
     for processor_id, attributes in all_client_models.items():
         train_error, val_error = attributes["trainerr"], attributes["valerr"]
         train_errors.append(train_error)
