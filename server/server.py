@@ -138,7 +138,7 @@ def model_evaluation():
     plt.figure()
     plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
     plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_models["processor-7"]["Xval"], all_client_models["processor-0"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_models["processor-8"]["Xval"], all_client_models["processor-2"]["yval"], color="blue", label="validation data cluster 0", linewidth=2)
     plt.plot(all_client_models["processor-15"]["Xval"], all_client_models["processor-11"]["yval"], color="red", label="val data second cluster", linewidth=2)
     plt.savefig('/app/validation.png')
     print(f"Validation graph is successfully saved in /app/validation.png")
