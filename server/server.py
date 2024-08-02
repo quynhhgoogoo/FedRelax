@@ -5,8 +5,10 @@ import json
 from tokenize import Triple
 import numpy as np
 from sklearn.neighbors import kneighbors_graph
+from kubernetes import client, config
 import base64
 from flask import Flask, request, jsonify, Response
+from kubernetes import client, config
 import networkx as nx
 import matplotlib.pyplot as plt
 import datetime
@@ -24,7 +26,10 @@ all_client_attributes = {}
 all_client_models = {}
 # Initialize empty dictionary to store all neighbour predictions's attributes
 data_to_sends = dict()
-desired_num_pods = 20
+config.load_kube_config()
+v1 = client.CoreV1Api()
+pods = v1.list_namespaced_pod(namespace="fed-relax", label_selector="fedrelax-client")
+desired_num_pods = len(pods.item)
 
 # Initialize locks for thread safety
 attributes_lock = threading.Lock()
