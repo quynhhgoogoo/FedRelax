@@ -25,7 +25,7 @@ sudo docker build -t fed-relax-server -f server/Dockerfile .
 docker tag fed-relax-server quynhhgoogoo/fed-relax-server:latest
 docker push quynhhgoogoo/fed-relax-server:latest
 
-sudo docker build -t fed-relax-client -f client/Dockerfile .
+sudo docker build -t fed-relax-client -f Dockerfile .
 docker tag fed-relax-client quynhhgoogoo/fed-relax-client:latest
 docker push quynhhgoogoo/fed-relax-client:latest
 

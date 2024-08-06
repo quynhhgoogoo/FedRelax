@@ -4,7 +4,7 @@ metadata:
   name: pod-reader-binding
 subjects:
 - kind: ServiceAccount
-  name: my-service-account
+  name: default
   namespace: fed-relax
 roleRef:
   kind: ClusterRole
