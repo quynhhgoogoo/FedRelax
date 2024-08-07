@@ -80,9 +80,13 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     return model
 
 def decode_and_unpickle(encoded_data):
-    decoded_data = base64.b64decode(encoded_data)
-    unpickled_data = pickle.loads(decoded_data)
-    return unpickled_data
+    try:
+        decoded_data = base64.b64decode(encoded_data)
+        unpickled_data = pickle.loads(decoded_data)
+        return unpickled_data
+    except Exception as e:
+        app.logger.error("Error decoding and unpickling data: %s", e)
+        raise
 
 def process_all_coords(coords_received):
     global all_client_coords
@@ -221,38 +225,50 @@ def receive_all_coords():
     try:
         # Receive data from the client
         coords_received = request.get_json()
-        app.logger.debug("Received client attributes %s", coords_received)
+        app.logger.debug("Received client attributes: %s", coords_received)
         
-        global all_client_coords
-        print("Decoding data..")
-        try:
-            pod_name = coords_received['pod_name']
-            coords = decode_and_unpickle(coords_received['coords'])
-            print(f"Received update from pod: {pod_name} with {coords}")
+        if not coords_received:
+            app.logger.error("No data received in the request.")
+            return jsonify({"error": "No data received."}), 400
 
-            pod_attributes = {"coords": coords}
-            with attributes_lock:
-                # Add the attributes to the global dictionary
-                all_client_coords[pod_name] = pod_attributes
+        print("Decoding data...")  # Ensure this line is reached
+        app.logger.debug("Decoding data...")
 
-        except Exception as e:
-            app.logger.error("Error processing client attributes: %s", e)
-            return jsonify({"error": "An error occurred while processing client attributes"}), 500
+        pod_name = coords_received.get('pod_name')
+        if not pod_name:
+            app.logger.error("No 'pod_name' in received data.")
+            return jsonify({"error": "No 'pod_name' in received data."}), 400
+
+        coords_encoded = coords_received.get('coords')
+        if not coords_encoded:
+            app.logger.error("No 'coords' in received data.")
+            return jsonify({"error": "No 'coords' in received data."}), 400
+
+        coords = decode_and_unpickle(coords_encoded)
+        print(f"Received update from pod: {pod_name} with coordinates: {coords}")
+        app.logger.debug(f"Received update from pod: {pod_name} with coordinates: {coords}")
+
+        pod_attributes = {"coords": coords}
+        with attributes_lock:
+            # Add the attributes to the global dictionary
+            all_client_coords[pod_name] = pod_attributes
+            app.logger.debug(f"Updated all_client_coords: {all_client_coords}")
 
         print("Current all_client_coords:", all_client_coords)
+        app.logger.debug("Current all_client_coords: %s", all_client_coords)
 
         # Check if all pods have sent their attributes
         if len(all_client_coords) == desired_num_pods - 1:
             print("Received all coords of nodes across graph: ", all_client_coords)
+            app.logger.debug("Received all coords of nodes across graph: %s", all_client_coords)
         
         return jsonify({"message": "Data processed successfully."}), 200
 
     except ValueError as ve:
-        logging.error(f"ValueError: {ve}")
+        app.logger.error(f"ValueError: {ve}")
         return jsonify({"error": str(ve)}), 400
 
     except Exception as e:
-        print("UnexpectedError:", e)
         app.logger.error("UnexpectedError: %s", e)
         return jsonify({"error": "An unexpected error occurred"}), 500
     
