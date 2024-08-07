@@ -26,6 +26,8 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 all_client_coords = {}
 # Initialize empty dictionary to store model updates of neighbours
 neighbours_models = {}
+# Keep track on neighbour nodes
+neighbour_lists = []
 desired_num_pods = 5
 service_name = "processor-service"
 namespace = "fed-relax"
@@ -289,6 +291,12 @@ def main():
     yval = data["yval"]
     coords = data["coords"]
 
+    # Train a local model (replace with your actual model training)
+    local_model = train_local_model(Xtrain, ytrain)
+
+    # Get sample weights (e.g., set equal weights for all data points)
+    sample_weight = np.ones(len(Xtrain))
+
     # Send coordinates to all other pods
     send_coordinates(coords, pod_urls)
 
@@ -302,6 +310,13 @@ def main():
         print("Graph after being fully updated", all_client_coords)
         knn_graph = add_edges_k8s(all_client_coords)
         visualize_and_save_graph(knn_graph, '/app/knn_graph_{}.png'.format(my_pod_name))
+
+    # Get neighbour list
+    global neighbour_lists
+    for node_j in knn_graph.neighbors(my_pod_name):
+        neighbour_lists.append(node_j)
+    print("The neighbour pods for current local pod is: ", neighbour_lists)
+
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
