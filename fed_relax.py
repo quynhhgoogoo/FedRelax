@@ -10,9 +10,14 @@ from sklearn.metrics import mean_squared_error
 import logging
 from flask import Flask, request, jsonify, Response
 from kubernetes import client, config
+import networkx as nx
+from sklearn.neighbors import kneighbors_graph
+import matplotlib.pyplot as plt
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
+attributes_lock = threading.Lock()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -21,7 +26,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 all_client_coords = {}
 # Initialize empty dictionary to store model updates of neighbours
 neighbours_models = {}
-desired_num_pods = 3
+desired_num_pods = 5
 service_name = "processor-service"
 namespace = "fed-relax"
 port = 4000
@@ -43,7 +48,7 @@ pod_urls = get_pod_list(service_name, namespace, port)
 
 # Remove the URL of the current pod from the list
 my_pod_name = os.getenv('MY_POD_NAME')
-my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_coords"
+my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/"
 pod_urls = [url for url in pod_urls if url != my_pod_url]
 
 def load_partitioned_data(data_dir='/pod-data'):
@@ -81,42 +86,67 @@ def decode_and_unpickle(encoded_data):
 
 def process_all_coords(coords_received):
     global all_client_coords
+    print("Decoding data..")
     try:
         pod_name = coords_received['pod_name']
         coords = decode_and_unpickle(coords_received['coords'])
         print(f"Received update from pod: {pod_name} with {coords}")
 
         pod_attributes = {"coords": coords}
-        all_client_coords[pod_name] = pod_attributes
+        with attributes_lock:
+            # Add the attributes to the global dictionary
+            all_client_coords[pod_name] = pod_attributes
 
     except Exception as e:
         app.logger.error("Error processing client attributes: %s", e)
         return jsonify({"error": "An error occurred while processing client attributes"}), 500
 
-def send_coordinates(coords, pod_urls):
-    """Send coordinates to a list of pod URLs."""
+
+def send_coordinates(coords, pod_urls, max_retries=3, retry_delay=5):
+    """Send coordinates to a list of pod URLs with retry logic."""
     print("Broadcasting coordinates to other pods")
     coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
+    responses = []  # Collect all responses
+    
     for url in pod_urls:
-        try:
-            url += "/receive_coords"
-            # Create a dictionary containing model parameters, training data, and sample weights
-            client_update = {
-                "pod_name": os.environ.get('MY_POD_NAME'),
-                "coords": coords_encoded
-            }
-            print("Broadcasting coordinates to ", url)
-            # Send the data to the server
-            response = requests.post(url, json=client_update)
-            if response.status_code == 200:
-                print(f"Coordinates sent successfully to {url}")
-            else:
-                print(f"Failed to send coordinates to {url}. Status code: {response.status_code}")
-            return response  # Return the response object
+        url += "/receive_coords"
+        client_update = {
+            "pod_name": os.environ.get('MY_POD_NAME'),
+            "coords": coords_encoded
+        }
+        success = False
+        attempt = 0
+        
+        while not success and attempt < max_retries:
+            try:
+                print(f"Attempt {attempt + 1} to send coordinates to {url}")
+                response = requests.post(url, json=client_update)
+                
+                if response.status_code == 200:
+                    print(f"Coordinates sent successfully to {url}")
+                    success = True
+                else:
+                    print(f"Failed to send coordinates to {url}. Status code: {response.status_code}")
+                    attempt += 1
+                    if attempt < max_retries:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(f"Max retries reached for {url}. Giving up.")
+                        
+            except Exception as e:
+                logger.error("Error sending coordinates to server: %s", e)
+                attempt += 1
+                if attempt < max_retries:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Max retries reached for {url}. Giving up.")
+        
+        responses.append(response if success else None) 
 
-        except Exception as e:
-            logger.error("Error sending coordinates to server: %s", e)
-            return None
+    return responses
+
 
 def are_all_pods_ready():
     """Check if all pods in the StatefulSet are ready."""
@@ -136,22 +166,85 @@ def are_all_pods_ready():
         logger.error("Error checking pod readiness: %s", e)
         return False
 
+
+def add_edges_k8s(clients_attributes, nrneighbors=1):
+    """
+    Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
+    using k-nearest neighbors approach.
+    """
+    # Initialize empty graph
+    graph = nx.Graph()
+
+    # Add nodes to the graph with pod attributes
+    for pod_name, attributes in clients_attributes.items():
+        graph.add_node(pod_name, **attributes)
+
+    # Build a numpy array containing node positions
+    node_positions = np.array([attributes["coords"] for attributes in clients_attributes.values()], dtype=float)
+
+    # Ensure there are enough samples to calculate neighbors
+    if len(node_positions) <= nrneighbors:
+        raise ValueError(f"Number of samples ({len(node_positions)}) is less than or equal to number of neighbors ({nrneighbors}).")
+
+    # Calculate k-nearest neighbors graph
+    A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
+
+    # Iterate over the k-nearest neighbors graph and add edges with weights
+    for i in range(len(clients_attributes)):
+        for j in range(len(clients_attributes)):
+            if A[i, j] > 0:
+                pod_name_i = list(clients_attributes.keys())[i]
+                pod_name_j = list(clients_attributes.keys())[j]
+
+                # Calculate the Euclidean distance between pods based on their positions
+                distance = np.linalg.norm(node_positions[i] - node_positions[j])
+
+                # Add edge with weight based on distance
+                graph.add_edge(pod_name_i, pod_name_j, weight=distance)
+
+    return graph
+
     
+# Function to visualize the graph and save the image
+def visualize_and_save_graph(graph, output_path):
+    pos = nx.spring_layout(graph)  # Compute layout for visualization
+    plt.figure(figsize=(10, 10))
+    nx.draw(graph, pos, with_labels=True, node_size=3000, node_color='skyblue', font_size=10, font_weight='bold')
+    plt.title("Graph Visualization")
+    plt.savefig(output_path)  # Save the image to a file
+    print(f"Image is successfully saved in {output_path}")
+    plt.show()  # Display the graph
+
+
 @app.route('/receive_coords', methods=['POST'])
 def receive_all_coords():
     try:
         # Receive data from the client
-        data = request.get_json()
-        app.logger.debug("Received client attributes %s", data)
-
-        # Process the received JSON data
-        process_all_coords(data)   
+        coords_received = request.get_json()
+        app.logger.debug("Received client attributes %s", coords_received)
         
+        global all_client_coords
+        print("Decoding data..")
+        try:
+            pod_name = coords_received['pod_name']
+            coords = decode_and_unpickle(coords_received['coords'])
+            print(f"Received update from pod: {pod_name} with {coords}")
+
+            pod_attributes = {"coords": coords}
+            with attributes_lock:
+                # Add the attributes to the global dictionary
+                all_client_coords[pod_name] = pod_attributes
+
+        except Exception as e:
+            app.logger.error("Error processing client attributes: %s", e)
+            return jsonify({"error": "An error occurred while processing client attributes"}), 500
+
+        print("Current all_client_coords:", all_client_coords)
+
         # Check if all pods have sent their attributes
         if len(all_client_coords) == desired_num_pods - 1:
             print("Received all coords of nodes across graph: ", all_client_coords)
-
-        # Send the response
+        
         return jsonify({"message": "Data processed successfully."}), 200
 
     except ValueError as ve:
@@ -180,6 +273,12 @@ def main():
 
     # Send coordinates to all other pods
     send_coordinates(coords, pod_urls)
+
+    Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
+    if len(all_client_coords) == desired_num_pods-1:
+        print("Graph after being fully updated", all_client_coords)
+        knn_graph = add_edges_k8s(all_client_coords)
+        visualize_and_save_graph(knn_graph, '/app/knn_graph.png')
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
