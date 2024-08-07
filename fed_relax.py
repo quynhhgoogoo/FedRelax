@@ -258,11 +258,11 @@ def receive_all_coords():
         app.logger.debug("Current all_client_coords: %s", all_client_coords)
 
         # Check if all pods have sent their attributes
-        if len(all_client_coords) == desired_num_pods - 1:
+        if len(all_client_coords) == desired_num_pods-1:
             print("Received all coords of nodes across graph: ", all_client_coords)
             app.logger.debug("Received all coords of nodes across graph: %s", all_client_coords)
-            knn_graph = add_edges_k8s(all_client_coords)
-            visualize_and_save_graph(knn_graph, f"/app/knn_graph_{pod_name}.png")
+            #knn_graph = add_edges_k8s(all_client_coords)
+            #visualize_and_save_graph(knn_graph, '/app/knn_graph_{}.png'.format(my_pod_name))
         
         return jsonify({"message": "Data processed successfully."}), 200
 
@@ -297,9 +297,11 @@ def main():
 
     Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
     if len(all_client_coords) == desired_num_pods-1:
+        pod_attributes = {"coords": coords}
+        all_client_coords[my_pod_name] = pod_attributes
         print("Graph after being fully updated", all_client_coords)
         knn_graph = add_edges_k8s(all_client_coords)
-        visualize_and_save_graph(knn_graph, '/app/knn_graph_{pod_name}.png')
+        visualize_and_save_graph(knn_graph, '/app/knn_graph_{}.png'.format(my_pod_name))
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
