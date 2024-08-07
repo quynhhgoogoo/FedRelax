@@ -231,30 +231,38 @@ def receive_all_coords():
             app.logger.error("No data received in the request.")
             return jsonify({"error": "No data received."}), 400
 
-        pod_name = coords_received.get('pod_name')
-        coords_encoded = coords_received.get('coords')
+        print("Decoding data...")  # Ensure this line is reached
+        app.logger.debug("Decoding data...")
 
-        if not pod_name or not coords_encoded:
-            error_message = "No 'pod_name' or 'coords' in received data."
-            app.logger.error(error_message)
-            return jsonify({"error": error_message}), 400
+        pod_name = coords_received.get('pod_name')
+        if not pod_name:
+            app.logger.error("No 'pod_name' in received data.")
+            return jsonify({"error": "No 'pod_name' in received data."}), 400
+
+        coords_encoded = coords_received.get('coords')
+        if not coords_encoded:
+            app.logger.error("No 'coords' in received data.")
+            return jsonify({"error": "No 'coords' in received data."}), 400
 
         coords = decode_and_unpickle(coords_encoded)
+        print(f"Received update from pod: {pod_name} with coordinates: {coords}")
         app.logger.debug(f"Received update from pod: {pod_name} with coordinates: {coords}")
 
         pod_attributes = {"coords": coords}
         with attributes_lock:
+            # Add the attributes to the global dictionary
             all_client_coords[pod_name] = pod_attributes
             app.logger.debug(f"Updated all_client_coords: {all_client_coords}")
 
+        print("Current all_client_coords:", all_client_coords)
+        app.logger.debug("Current all_client_coords: %s", all_client_coords)
+
+        # Check if all pods have sent their attributes
         if len(all_client_coords) == desired_num_pods - 1:
-            app.logger.debug(f"Received all coords of nodes across graph: {all_client_coords}")
-            try:
-                knn_graph = add_edges_k8s(all_client_coords)
-                visualize_and_save_graph(knn_graph, f'/app/knn_graph_{pod_name}.png')
-            except Exception as e:
-                app.logger.error(f"Error generating KNN graph: {e}")
-                return jsonify({"error": "Error generating KNN graph."}), 500
+            print("Received all coords of nodes across graph: ", all_client_coords)
+            app.logger.debug("Received all coords of nodes across graph: %s", all_client_coords)
+            knn_graph = add_edges_k8s(all_client_coords)
+            visualize_and_save_graph(knn_graph, f"/app/knn_graph_{pod_name}.png")
         
         return jsonify({"message": "Data processed successfully."}), 200
 
