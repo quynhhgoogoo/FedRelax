@@ -363,6 +363,10 @@ def main():
     # Send model to all neighbour pods
     print("Send model to neighbour pods")
     send_data(model_update, neighbour_lists)
+    
+    while len(neighbours_models) < len(neighbour_lists):
+        time.sleep(90)
+
     if len(neighbours_models) == len(neighbour_lists):
         print("Received all models from neighbours: %s", neighbours_models)
 
