@@ -250,11 +250,6 @@ def receive_all_coords():
 
         print("Current all_client_coords:", all_client_coords)
         app.logger.debug("Current all_client_coords: %s", all_client_coords)
-
-        # Check if all pods have sent their attributes
-        if len(all_client_coords) == desired_num_pods-1:
-            print("Received all coords of nodes across graph: ", all_client_coords)
-            app.logger.debug("Received all coords of nodes across graph: %s", all_client_coords)
         
         return jsonify({"message": "Data processed successfully."}), 200
 
@@ -366,9 +361,10 @@ def main():
         "model": local_model_encoded
     }
     # Send model to all neighbour pods
-    print("Send model to other pods")
+    print("Send model to neighbour pods")
     send_data(model_update, neighbour_lists)
-    print("Received all coords of nodes across graph: %s", neighbours_models)
+    if len(neighbours_models) == len(neighbour_lists):
+        print("Received all models from neighbours: %s", neighbours_models)
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
