@@ -32,6 +32,7 @@ desired_num_pods = 5
 service_name = "processor-service"
 namespace = "fed-relax"
 port = 4000
+current_iteration = 0
 
 # Initialize Kubernetes client
 config.load_incluster_config()
@@ -123,14 +124,14 @@ def process_all_coords(coords_received):
         return jsonify({"error": "An error occurred while processing client attributes"}), 500
 
 
-def send_data(client_update, pod_urls, max_retries=3, retry_delay=5):
+def send_data(client_update, pod_urls, max_retries=100000, retry_delay=20):
     """Send coordinates to a list of pod URLs with retry logic."""
     responses = []  # Collect all responses
     for url in pod_urls:
         success = False
         attempt = 0
         
-        while not success and attempt < max_retries:
+        while not success:
             try:
                 print(f"Attempt {attempt + 1} to send coordinates to {url}")
                 response = requests.post(url, json=client_update)
@@ -231,15 +232,17 @@ def visualize_and_save_graph(graph, output_path):
 
 def FedRelax(G, regparam=0, maxiter=10):
     # Determine the number of data points in the test set
-    global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight
+    global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
     for iter_GD in range(maxiter):
-
+        current_iteration = iter_GD
         # Send local model and receive model from neighbours
         local_model_encoded = base64.b64encode(pickle.dumps(local_model)).decode('utf-8')
+        iter_GD_encoded = base64.b64encode(pickle.dumps(iter_GD)).decode('utf-8')
         model_update = {
             "pod_name": os.environ.get('MY_POD_NAME'),
-            "model": local_model_encoded
+            "model": local_model_encoded,
+            "iter": iter_GD_encoded
         }
         print("Send model to neighbour pods")
         send_data(model_update, neighbour_lists)
@@ -267,6 +270,7 @@ def FedRelax(G, regparam=0, maxiter=10):
         local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
         print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
         neighbours_models.clear()
+    app.logger.debug("The FedRelax process is completed")
 
 
 @app.route('/receive_coords', methods=['POST'])
@@ -339,8 +343,19 @@ def receive_models():
         if not models_encoded:
             app.logger.error("No 'model' in received data.")
             return jsonify({"error": "No 'model' in received data."}), 400
+        
+        iter_encoded = models_received.get('iter')
+        if not iter_encoded:
+            app.logger.error("No 'iter' in received data.")
+            return jsonify({"error": "No 'iter' in received data."}), 400
+        
+        iter = decode_and_unpickle(iter_encoded)
+        if iter != current_iteration:
+            app.logger.error("Current iteration is not the same as received iteration: received=%s, current=%s", iter, current_iteration)
+            return jsonify({"Current iteration is not the same as received iteration."}), 400
 
         model = decode_and_unpickle(models_encoded)
+        
         print(f"Received update from pod: {pod_name} with coordinates: {model}")
         app.logger.debug(f"Received update from pod: {pod_name} with coordinates: {model}")
 
@@ -393,7 +408,7 @@ def main():
     global neighbour_lists
     for node_j in knn_graph.neighbors(my_pod_name):
         neighbour_lists.append(f"http://{node_j}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_models")
-    print("The neighbour pods for current local pod is: ", neighbour_lists)
+    print("The neighbour pods for current local pod are: ", neighbour_lists)
 
     print("Running FedRelax algorithm...")
     FedRelax(knn_graph, regparam=0, maxiter=10)
