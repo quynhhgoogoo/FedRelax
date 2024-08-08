@@ -43,14 +43,14 @@ def get_pod_list(service_name, namespace, port, desired_num_pods=desired_num_pod
     pod_list = []
     for i in range(desired_num_pods):  # Adjust as needed
         pod_name = f"processor-{i}"
-        pod_list.append(f"http://{pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/")
+        pod_list.append(f"http://{pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_coords")
     return pod_list
 
 pod_urls = get_pod_list(service_name, namespace, port)
 
 # Remove the URL of the current pod from the list
 my_pod_name = os.getenv('MY_POD_NAME')
-my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/"
+my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_coords"
 pod_urls = [url for url in pod_urls if url != my_pod_url]
 
 def load_partitioned_data(data_dir='/pod-data'):
@@ -108,18 +108,10 @@ def process_all_coords(coords_received):
         return jsonify({"error": "An error occurred while processing client attributes"}), 500
 
 
-def send_coordinates(coords, pod_urls, max_retries=3, retry_delay=5):
+def send_data(client_update, pod_urls, max_retries=3, retry_delay=5):
     """Send coordinates to a list of pod URLs with retry logic."""
-    print("Broadcasting coordinates to other pods")
-    coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
     responses = []  # Collect all responses
-    
     for url in pod_urls:
-        url += "/receive_coords"
-        client_update = {
-            "pod_name": os.environ.get('MY_POD_NAME'),
-            "coords": coords_encoded
-        }
         success = False
         attempt = 0
         
@@ -263,8 +255,53 @@ def receive_all_coords():
         if len(all_client_coords) == desired_num_pods-1:
             print("Received all coords of nodes across graph: ", all_client_coords)
             app.logger.debug("Received all coords of nodes across graph: %s", all_client_coords)
-            #knn_graph = add_edges_k8s(all_client_coords)
-            #visualize_and_save_graph(knn_graph, '/app/knn_graph_{}.png'.format(my_pod_name))
+        
+        return jsonify({"message": "Data processed successfully."}), 200
+
+    except ValueError as ve:
+        app.logger.error(f"ValueError: {ve}")
+        return jsonify({"error": str(ve)}), 400
+
+    except Exception as e:
+        app.logger.error("UnexpectedError: %s", e)
+        return jsonify({"error": "An unexpected error occurred"}), 500
+    
+
+@app.route('/receive_models', methods=['POST'])
+def receive_models():
+    try:
+        models_received = request.get_json()
+        app.logger.debug("Received client attributes: %s", models_received)
+        
+        if not models_received:
+            app.logger.error("No data received in the request.")
+            return jsonify({"error": "No data received."}), 400
+
+        print("Decoding data...")  # Ensure this line is reached
+        app.logger.debug("Decoding data...")
+
+        pod_name = models_received.get('pod_name')
+        if not pod_name:
+            app.logger.error("No 'pod_name' in received data.")
+            return jsonify({"error": "No 'pod_name' in received data."}), 400
+
+        models_encoded = models_received.get('model')
+        if not models_encoded:
+            app.logger.error("No 'model' in received data.")
+            return jsonify({"error": "No 'model' in received data."}), 400
+
+        model = decode_and_unpickle(models_encoded)
+        print(f"Received update from pod: {pod_name} with coordinates: {model}")
+        app.logger.debug(f"Received update from pod: {pod_name} with coordinates: {model}")
+
+        pod_attributes = {"model": model}
+        with attributes_lock:
+            # Add the attributes to the global dictionary
+            neighbours_models[pod_name] = pod_attributes
+            app.logger.debug(f"Updated neighbours_models: {neighbours_models}")
+
+        print("Current neighbours_models:", neighbours_models)
+        app.logger.debug("Current neighbours_models: %s", neighbours_models)            
         
         return jsonify({"message": "Data processed successfully."}), 200
 
@@ -298,7 +335,13 @@ def main():
     sample_weight = np.ones(len(Xtrain))
 
     # Send coordinates to all other pods
-    send_coordinates(coords, pod_urls)
+    print("Broadcasting coordinates to other pods")
+    coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
+    coord_update = {
+        "pod_name": os.environ.get('MY_POD_NAME'),
+        "coords": coords_encoded
+    }
+    send_data(coord_update, pod_urls)
 
     while len(all_client_coords) < desired_num_pods-1:
         time.sleep(90)
@@ -314,9 +357,18 @@ def main():
     # Get neighbour list
     global neighbour_lists
     for node_j in knn_graph.neighbors(my_pod_name):
-        neighbour_lists.append(node_j)
+        neighbour_lists.append(f"http://{node_j}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_models")
     print("The neighbour pods for current local pod is: ", neighbour_lists)
 
+    local_model_encoded = base64.b64encode(pickle.dumps(local_model)).decode('utf-8')
+    model_update = {
+        "pod_name": os.environ.get('MY_POD_NAME'),
+        "model": local_model_encoded
+    }
+    # Send model to all neighbour pods
+    print("Send model to other pods")
+    send_data(model_update, neighbour_lists)
+    print("Received all coords of nodes across graph: %s", neighbours_models)
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
