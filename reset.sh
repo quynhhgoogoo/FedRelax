@@ -4,6 +4,7 @@
 # minikube start
 
 # Shifting to kind
+# kind delete cluster --name cluster1
 # kubectl cluster-info --context kind-kind
 # kind create cluster --config 1m.3w.config --name cluster1
 # kubectl cluster-info --context kind-cluster1
