@@ -81,6 +81,21 @@ def train_local_model(Xtrain, ytrain, max_depth=4):
     model.fit(Xtrain, ytrain)
     return model
 
+# Load data and train local model
+data = load_partitioned_data()
+Xtrain = data["Xtrain"]
+ytrain = data["ytrain"]
+Xval = data["Xval"]
+yval = data["yval"]
+coords = data["coords"]
+Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
+
+# Train a local model (replace with your actual model training)
+local_model = train_local_model(Xtrain, ytrain)
+
+# Get sample weights (e.g., set equal weights for all data points)
+sample_weight = np.ones(len(Xtrain))
+
 def decode_and_unpickle(encoded_data):
     try:
         decoded_data = base64.b64decode(encoded_data)
@@ -214,6 +229,46 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
+def FedRelax(G, regparam=0, maxiter=10):
+    # Determine the number of data points in the test set
+    global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight
+    testsize = Xtest.shape[0]
+    for iter_GD in range(maxiter):
+
+        # Send local model and receive model from neighbours
+        local_model_encoded = base64.b64encode(pickle.dumps(local_model)).decode('utf-8')
+        model_update = {
+            "pod_name": os.environ.get('MY_POD_NAME'),
+            "model": local_model_encoded
+        }
+        print("Send model to neighbour pods")
+        send_data(model_update, neighbour_lists)
+
+        # Wait until all the models from neighbours are received
+        while len(neighbours_models) < len(neighbour_lists):
+            time.sleep(90)
+        if len(neighbours_models) == len(neighbour_lists):
+            print("Received all models from neighbours: %s", neighbours_models)
+
+        # Update local model
+        for neighbour, attributes in neighbours_models.items():
+            nmodel = attributes["model"]
+            neighbourpred = nmodel.predict(Xtest).reshape(-1, 1)
+            neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+            ytrain = np.vstack((ytrain, neighbourpred))
+            Xtrain = np.vstack((Xtrain, Xtest))
+
+            # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
+            sampleweightaug = (regparam * len(ytrain) / testsize)
+            sample_weight_reshaped = sample_weight.reshape(-1, 1)
+            sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
+
+        # Fit the local model with the augmented dataset and sample weights
+        local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
+        print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
+        neighbours_models.clear()
+
+
 @app.route('/receive_coords', methods=['POST'])
 def receive_all_coords():
     try:
@@ -315,20 +370,6 @@ def main():
         print("Waiting for all pods to be ready...")
         time.sleep(10)
 
-    # Load data and train local model
-    data = load_partitioned_data()
-    Xtrain = data["Xtrain"]
-    ytrain = data["ytrain"]
-    Xval = data["Xval"]
-    yval = data["yval"]
-    coords = data["coords"]
-
-    # Train a local model (replace with your actual model training)
-    local_model = train_local_model(Xtrain, ytrain)
-
-    # Get sample weights (e.g., set equal weights for all data points)
-    sample_weight = np.ones(len(Xtrain))
-
     # Send coordinates to all other pods
     print("Broadcasting coordinates to other pods")
     coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
@@ -341,7 +382,6 @@ def main():
     while len(all_client_coords) < desired_num_pods-1:
         time.sleep(90)
 
-    Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
     if len(all_client_coords) == desired_num_pods-1:
         pod_attributes = {"coords": coords}
         all_client_coords[my_pod_name] = pod_attributes
@@ -355,20 +395,8 @@ def main():
         neighbour_lists.append(f"http://{node_j}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_models")
     print("The neighbour pods for current local pod is: ", neighbour_lists)
 
-    local_model_encoded = base64.b64encode(pickle.dumps(local_model)).decode('utf-8')
-    model_update = {
-        "pod_name": os.environ.get('MY_POD_NAME'),
-        "model": local_model_encoded
-    }
-    # Send model to all neighbour pods
-    print("Send model to neighbour pods")
-    send_data(model_update, neighbour_lists)
-    
-    while len(neighbours_models) < len(neighbour_lists):
-        time.sleep(90)
-
-    if len(neighbours_models) == len(neighbour_lists):
-        print("Received all models from neighbours: %s", neighbours_models)
+    print("Running FedRelax algorithm...")
+    FedRelax(knn_graph, regparam=0, maxiter=10)
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
