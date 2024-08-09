@@ -28,6 +28,8 @@ all_client_coords = {}
 neighbours_models = {}
 # Keep track on neighbour nodes
 neighbour_lists = []
+local_train_errors, local_val_errors = [], []
+all_train_errors, all_val_errors = [], []
 desired_num_pods = 5
 service_name = "processor-service"
 namespace = "fed-relax"
@@ -230,7 +232,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=10):
+def FedRelax(G, regparam=0, maxiter=5):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -271,6 +273,7 @@ def FedRelax(G, regparam=0, maxiter=10):
         print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
         neighbours_models.clear()
     app.logger.debug("The FedRelax process is completed")
+    return local_model
 
 
 @app.route('/receive_coords', methods=['POST'])
@@ -379,6 +382,30 @@ def receive_models():
         return jsonify({"error": "An unexpected error occurred"}), 500
     
 
+def model_evaluation(model, iteration=None, output_path=None):
+    trainerr = mean_squared_error(ytrain, model.predict(Xtrain))
+    valerr = mean_squared_error(yval, model.predict(Xval))
+    local_train_errors.append(trainerr)
+    local_val_errors.append(valerr)
+
+    if iteration == None:
+        print(f"Final iteration: Training error: {trainerr}. Validation error: {valerr}")
+        # Plot the errors across iterations
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, len(local_train_errors) + 1), local_train_errors, label='Training Error', marker='o')
+        plt.plot(range(1, len(local_val_errors) + 1), local_val_errors, label='Validation Error', marker='o')
+        
+        # Add title and labels
+        plt.title(f'Training vs Validation Error over Iterations')
+        plt.xlabel('Iteration')
+        plt.ylabel('Mean Squared Error')
+        plt.legend()
+        plt.savefig(output_path)
+        print(f"Image is successfully saved in {output_path}")
+    else:
+        print(f"Iteration {iteration}: Training error: {trainerr}. Validation error: {valerr}")
+
+
 def main():
     # Wait until all pods are ready
     while not are_all_pods_ready():
@@ -411,7 +438,9 @@ def main():
     print("The neighbour pods for current local pod are: ", neighbour_lists)
 
     print("Running FedRelax algorithm...")
-    FedRelax(knn_graph, regparam=0, maxiter=10)
+    final_model = FedRelax(knn_graph, regparam=0)
+    print("Evaluating final model")
+    model_evaluation(final_model, None, '/app/local_mse_{}.png'.format(my_pod_name))
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
