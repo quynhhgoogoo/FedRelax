@@ -272,6 +272,7 @@ def FedRelax(G, regparam=0, maxiter=5):
         local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
         print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
         neighbours_models.clear()
+        model_evaluation(local_model,iter_GD)
     app.logger.debug("The FedRelax process is completed")
     return local_model
 
@@ -312,6 +313,53 @@ def receive_all_coords():
 
         print("Current all_client_coords:", all_client_coords)
         app.logger.debug("Current all_client_coords: %s", all_client_coords)
+        
+        return jsonify({"message": "Data processed successfully."}), 200
+
+    except ValueError as ve:
+        app.logger.error(f"ValueError: {ve}")
+        return jsonify({"error": str(ve)}), 400
+
+    except Exception as e:
+        app.logger.error("UnexpectedError: %s", e)
+        return jsonify({"error": "An unexpected error occurred"}), 500
+
+
+@app.route('/receive_evaluations', methods=['POST'])
+def receive_all_evaluations():
+    try:
+        # Receive data from the client
+        evaluations_received = request.get_json()
+        app.logger.debug("Received client attributes: %s", evaluations_received)
+        
+        if not evaluations_received:
+            app.logger.error("No data received in the request.")
+            return jsonify({"error": "No data received."}), 400
+
+        print("Decoding data...")  # Ensure this line is reached
+        app.logger.debug("Decoding data...")
+
+        pod_name = evaluations_received.get('pod_name')
+        if not pod_name:
+            app.logger.error("No 'pod_name' in received data.")
+            return jsonify({"error": "No 'pod_name' in received data."}), 400
+
+        trainerr_encoded = evaluations_received.get('trainerr')
+        valerr_encoded = evaluations_received.get('valerr')
+        if not trainerr_encoded or not valerr_encoded:
+            app.logger.error("Missing 'err' in received data.")
+            return jsonify({"error": "Missing 'err' in received data."}), 400
+
+        trainerr = decode_and_unpickle(trainerr_encoded)
+        valerr = decode_and_unpickle(valerr_encoded)
+        print(f"Received from pod: {pod_name} with training and validation error: {trainerr}, {valerr}")
+
+        with attributes_lock:
+            # Add the attributes to the global dictionary
+            all_train_errors.append(trainerr)
+            all_val_errors.append(valerr)
+            app.logger.debug(f"Current all_train_errors: {all_train_errors}. Current all_val_errors: {all_val_errors}")
+        app.logger.debug(f"Final all_train_errors: {all_train_errors}. Final all_val_errors: {all_val_errors}")
         
         return jsonify({"message": "Data processed successfully."}), 200
 
@@ -383,6 +431,7 @@ def receive_models():
     
 
 def model_evaluation(model, iteration=None, output_path=None):
+    global local_val_errors, local_train_errors, neighbour_lists
     trainerr = mean_squared_error(ytrain, model.predict(Xtrain))
     valerr = mean_squared_error(yval, model.predict(Xval))
     local_train_errors.append(trainerr)
@@ -402,9 +451,34 @@ def model_evaluation(model, iteration=None, output_path=None):
         plt.legend()
         plt.savefig(output_path)
         print(f"Image is successfully saved in {output_path}")
+        error_calculation = {
+            "pod_name": os.environ.get('MY_POD_NAME'),
+            "trainerr": trainerr,
+            "valerr": valerr
+        }
+        print("Sending error calculations to all nodes across graph")
+        send_data(error_calculation, pod_urls)
     else:
         print(f"Iteration {iteration}: Training error: {trainerr}. Validation error: {valerr}")
 
+
+def all_model_evaluation(output_path):
+    while len(all_train_errors) < desired_num_pods - 1 or len(all_val_errors) < desired_num_pods - 1:
+        time.sleep(90)
+
+    print("Average train error :", sum(all_train_errors)/len(pod_urls))
+    print("Average val error :", sum(all_val_errors)/len(pod_urls))
+
+    print("Generate model evaluation graph...")
+    nodes = range(1, len(all_train_errors) + 1)
+    plt.figure(figsize=(12, 6))
+    plt.plot(nodes, all_train_errors, marker='o', color='blue', label='Training Error')
+    plt.plot(nodes, all_train_errors, marker='o', color='green', label='Validation Error')
+    plt.xlabel('Node')
+    plt.ylabel('Mean Squared Error')
+    plt.title('Training and Validation Errors Across Nodes')
+    plt.xticks(nodes) 
+    plt.grid(True)
 
 def main():
     # Wait until all pods are ready
