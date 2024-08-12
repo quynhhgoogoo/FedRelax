@@ -22,7 +22,7 @@ docker rmi quynhhgoogoo/fed-relax-server
 
 # Build the images
 # Seperated containers
-sudo docker build -t fed-relax-server -f server/Dockerfile .
+sudo docker build -t fed-relax-server -f evaluation/Dockerfile .
 docker tag fed-relax-server quynhhgoogoo/fed-relax-server:latest
 docker push quynhhgoogoo/fed-relax-server:latest
 

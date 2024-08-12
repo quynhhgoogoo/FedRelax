@@ -30,7 +30,7 @@ neighbours_models = {}
 neighbour_lists = []
 local_train_errors, local_val_errors = [], []
 all_train_errors, all_val_errors = [], []
-desired_num_pods = 10
+desired_num_pods = 5
 service_name = "processor-service"
 namespace = "fed-relax"
 port = 4000
@@ -232,7 +232,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=100):
+def FedRelax(G, regparam=0, maxiter=10):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -525,6 +525,24 @@ def main():
     print("Evaluating final model")
     model_evaluation(final_model, None, '/app/local_mse_{}.png'.format(my_pod_name))
     all_model_evaluation('/app/all_errors_calculation.png')
+
+    print("Send all the attributes for aggregation to evaluate")
+    final_model_encoded = base64.b64encode(pickle.dumps(final_model)).decode('utf-8')
+    Xval_encoded = base64.b64encode(pickle.dumps(Xval)).decode('utf-8')
+    yval_encoded = base64.b64encode(pickle.dumps(yval)).decode('utf-8')
+    knn_encoded = base64.b64encode(pickle.dumps(knn_graph)).decode('utf-8')
+
+    evaluation_attributes = {
+        "pod_name": os.environ.get('MY_POD_NAME'),
+        "model": final_model_encoded,
+        "coords": coords_encoded,
+        "Xval": Xval_encoded,
+        "yval": yval_encoded,
+        "graph": knn_encoded
+    }
+    aggregator_url = ["http://server-service:3000/receive_attributes"]
+    send_data(evaluation_attributes, aggregator_url)
+
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
