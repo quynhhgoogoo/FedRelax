@@ -30,7 +30,7 @@ neighbours_models = {}
 neighbour_lists = []
 local_train_errors, local_val_errors = [], []
 all_train_errors, all_val_errors = [], []
-desired_num_pods = 5
+desired_num_pods = 10
 service_name = "processor-service"
 namespace = "fed-relax"
 port = 4000
@@ -232,7 +232,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=5):
+def FedRelax(G, regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]

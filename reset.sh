@@ -83,7 +83,8 @@ minikube addons enable metrics-server
 # kubectl get pods -o=jsonpath='{range .items[*]}Pod: {.metadata.name}{"\nAnnotations:\n"}{range .metadata.annotations}{.key}: {.value}{"\n"}{end}{"\n\n"}{end}'
 
 # Download image to local machine
-# kubectl cp server-8677d94948-w4xpf:/app/validation.png ./output/validation.png
+# kubectl cp processor-4:/app/local_mse_processor-4.png ./output/local_mse_processor-4.png
+# for i in {0..10}; do kubectl cp processor-$i:/app/local_mse_processor-$i.png ./output/local_mse_processor-$i.png; done
 
 # Expose pod as service
 # kubectl expose deployment client --port=3000 --target-port=5000 --type=ClusterIP --name=client-service
