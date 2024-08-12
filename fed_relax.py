@@ -46,14 +46,14 @@ def get_pod_list(service_name, namespace, port, desired_num_pods=desired_num_pod
     pod_list = []
     for i in range(desired_num_pods):  # Adjust as needed
         pod_name = f"processor-{i}"
-        pod_list.append(f"http://{pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_coords")
+        pod_list.append(f"http://{pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}")
     return pod_list
 
 pod_urls = get_pod_list(service_name, namespace, port)
 
 # Remove the URL of the current pod from the list
 my_pod_name = os.getenv('MY_POD_NAME')
-my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_coords"
+my_pod_url = f"http://{my_pod_name}.{service_name}.{namespace}.svc.cluster.local:{port}"
 pod_urls = [url for url in pod_urls if url != my_pod_url]
 
 def load_partitioned_data(data_dir='/pod-data'):
@@ -451,19 +451,24 @@ def model_evaluation(model, iteration=None, output_path=None):
         plt.legend()
         plt.savefig(output_path)
         print(f"Image is successfully saved in {output_path}")
+        all_train_errors.append(trainerr)
+        all_val_errors.append(valerr)
+        trainerr_encoded = base64.b64encode(pickle.dumps(trainerr)).decode('utf-8')
+        valerr_encoded = base64.b64encode(pickle.dumps(valerr)).decode('utf-8')
         error_calculation = {
             "pod_name": os.environ.get('MY_POD_NAME'),
-            "trainerr": trainerr,
-            "valerr": valerr
+            "trainerr": trainerr_encoded,
+            "valerr": valerr_encoded
         }
         print("Sending error calculations to all nodes across graph")
-        send_data(error_calculation, pod_urls)
+        pod_urls_evaluation = [f"{url}/receive_evaluations" for url in pod_urls]
+        send_data(error_calculation, pod_urls_evaluation)
     else:
         print(f"Iteration {iteration}: Training error: {trainerr}. Validation error: {valerr}")
 
 
 def all_model_evaluation(output_path):
-    while len(all_train_errors) < desired_num_pods - 1 or len(all_val_errors) < desired_num_pods - 1:
+    while len(all_train_errors) < desired_num_pods or len(all_val_errors) < desired_num_pods:
         time.sleep(90)
 
     print("Average train error :", sum(all_train_errors)/len(pod_urls))
@@ -479,8 +484,11 @@ def all_model_evaluation(output_path):
     plt.title('Training and Validation Errors Across Nodes')
     plt.xticks(nodes) 
     plt.grid(True)
+    plt.savefig(output_path)
+    print(f"Image is successfully saved in {output_path}")
 
 def main():
+    global coords
     # Wait until all pods are ready
     while not are_all_pods_ready():
         print("Waiting for all pods to be ready...")
@@ -493,7 +501,8 @@ def main():
         "pod_name": os.environ.get('MY_POD_NAME'),
         "coords": coords_encoded
     }
-    send_data(coord_update, pod_urls)
+    pod_coords_url = [f"{url}/receive_coords" for url in pod_urls]
+    send_data(coord_update, pod_coords_url)
 
     while len(all_client_coords) < desired_num_pods-1:
         time.sleep(90)
@@ -515,6 +524,7 @@ def main():
     final_model = FedRelax(knn_graph, regparam=0)
     print("Evaluating final model")
     model_evaluation(final_model, None, '/app/local_mse_{}.png'.format(my_pod_name))
+    all_model_evaluation('/app/all_errors_calculation.png')
 
 if __name__ == '__main__':
     # Start Flask server in a separate thread
