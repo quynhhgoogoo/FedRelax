@@ -39,6 +39,7 @@ kubectl create secret docker-registry regcred \
     --docker-password=$passvar \
     --docker-email=luongdiemquynh1998@gmail.com
 
+kubectl config set-context --current --namespace=fed-relax
 # Apply rbac with necessary permissions
 kubectl apply -f role.yaml
 kubectl apply -f role_binding.yaml
@@ -49,7 +50,6 @@ kubectl apply -f service.yaml
 kubectl apply -f deployment.yaml
 kubectl apply -f init_job.yaml
 kubectl get pods -n fed-relax
-kubectl config set-context --current --namespace=fed-relax
 
 # Add metric server
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml

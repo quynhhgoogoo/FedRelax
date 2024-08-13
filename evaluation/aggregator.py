@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import threading
+import time
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -12,7 +16,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Initialize empty dictionary to store client attributes for model evaluation
 all_client_attributes = {}
 attributes_lock = threading.Lock()
-desired_num_pods = 10
+desired_num_pods = 5
 
 def decode_and_unpickle(encoded_data):
     try:
@@ -27,53 +31,68 @@ def decode_and_unpickle(encoded_data):
 def validation_graph():
     global all_client_attributes
     X_val = all_client_attributes.get("processor-0")["Xval"]
-    y_1 = all_client_attributes.get("processor-11")["model"].predict(X_val)
-    y_2 = all_client_attributes.get("processor-5")["model"].predict(X_val)
+    y_1 = all_client_attributes.get("processor-1")["model"].predict(X_val)
+    y_2 = all_client_attributes.get("processor-2")["model"].predict(X_val)
 
     # Plot the results
     plt.figure()
     plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
     plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-8")["Xval"], all_client_attributes.get("processor-2")["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-15")["Xval"], all_client_attributes.get("processor-11")["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-3")["Xval"], all_client_attributes.get("processor-2")["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-4")["Xval"], all_client_attributes.get("processor-1")["yval"], color="red", label="val data second cluster", linewidth=2)
     plt.savefig('/app/validation.png')
     print(f"Validation graph is successfully saved in /app/validation.png")
 
-def PlotGraph(graphin, output_path="/app/final.png", annotate="name"):     
+def PlotGraph(graphin, pos='coords', annotate='name'):
     # the numpy array x will hold the horizontal coord of markers for each node in emp. graph graphin
-    x = np.zeros(len(desired_num_pods))
+    x = np.zeros(len(graphin.nodes))
     # vertical coords of markers 
-    y = np.zeros(len(desired_num_pods))
-    
-    iter_node = 0
-    for pod, attributes in all_client_attributes.items():
-        x[iter_node] = attributes['coords']
-        y[iter_node] = attributes['coords']
-        iter_node += 1
+    y = np.zeros(len(graphin.nodes))
+
+    # Create a mapping between node names and their corresponding indices
+    name_to_index = {name: i for i, name in enumerate(graphin.nodes)}
+
+    for edge_dmy in graphin.edges:
+        node_i = name_to_index[edge_dmy[0]]  # Extract node indices from the edge tuple
+        node_j = name_to_index[edge_dmy[1]]  # Extract node indices from the edge tuple
+
+        x[node_i] = graphin.nodes[edge_dmy[0]][pos][0]
+        x[node_j] = graphin.nodes[edge_dmy[1]][pos][0]
+
+        y[node_i] = graphin.nodes[edge_dmy[0]][pos][1]
+        y[node_j] = graphin.nodes[edge_dmy[1]][pos][1]
 
     # standareize the coordinates of node markers 
-    x = (x - np.min(x, axis=0))/np.std(x, axis=0) + 1 
-    y = (y - np.min(y, axis=0))/np.std(y, axis=0) + 1 
+    x = (x - np.min(x, axis=0)) / np.std(x, axis=0) + 1 
+    y = (y - np.min(y, axis=0)) / np.std(y, axis=0) + 1 
 
     # create a figure with prescribed dimensions 
-    fig, ax = plt.subplots(figsize=(10,10))
-    
+    fig, ax = plt.subplots(figsize=(10, 10))
+
     # generate a scatter plot with each marker representing a node in graphin
     ax.scatter(x, y, 300, marker='o', color='Black')
-    
+
     # draw links between two nodes if they are connected by an edge 
     # in the empirical graph. use the "weight" of the edge to determine the line thickness
     for edge_dmy in graphin.edges:
-        ax.plot([x[edge_dmy[0]],x[edge_dmy[1]]],[y[edge_dmy[0]],y[edge_dmy[1]]],c='black',lw=4*graphin.edges[edge_dmy]["weight"])
+        node_i = name_to_index[edge_dmy[0]]  # Extract node indices from the edge tuple
+        node_j = name_to_index[edge_dmy[1]]  # Extract node indices from the edge tuple
+
+        ax.plot([x[node_i], x[node_j]], [y[node_i], y[node_j]], c='black', lw=4 * graphin.edges[edge_dmy]["weight"])
 
     # annotate each marker by the node attribute whose name is stored in the input parameter "annotate"
-    for iter_node in graphin.nodes : 
-        ax.annotate(str(graphin.nodes[iter_node][annotate]),(x[iter_node]+0.2, 0.995*y[iter_node]),c="red" )
-    ax.set_ylim(0.9*np.min(y),1.1*np.max(y))
-    ax.set_xlim(0.9*np.min(x),1.1*np.max(x))
+    for iter_node in graphin.nodes:
+        i = name_to_index[iter_node]
+        if annotate in graphin.nodes[iter_node]:
+            ax.annotate(str(graphin.nodes[iter_node][annotate]), (x[i] + 0.2, 0.995 * y[i]), c="red")
+        else:
+            ax.annotate(str(iter_node), (x[i] + 0.2, 0.995 * y[i]), c="red")
 
-    fig.savefig(output_path, format='png') 
-    plt.close(fig)
+    ax.set_ylim(0.9 * np.min(y), 1.1 * np.max(y))
+    ax.set_xlim(0.9 * np.min(x), 1.1 * np.max(x))
+
+    plt.savefig('/app/final.png')  # Save the image to a file
+    print(f"Final graph is successfully saved in /app/final.png")
 
 
 @app.route('/receive_attributes', methods=['POST'])
@@ -148,11 +167,14 @@ def receive_attributes():
 
 def main():
     global all_client_attributes
-    graphin = all_client_attributes.get("processor-0")["model"]
+    while len(all_client_attributes) < desired_num_pods:
+        logger.debug("all_client_attributes: %d. Desired_num_pods %d", len(all_client_attributes), desired_num_pods)
+        time.sleep(20)
+    graphin = all_client_attributes.get("processor-0")["graph"]
+    print("Plotting the graph")
     PlotGraph(graphin)
     validation_graph()
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    app.run(host='0.0.0.0', port=3000, threaded=True)
+    threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 3000, 'threaded': True}).start()
     main()
