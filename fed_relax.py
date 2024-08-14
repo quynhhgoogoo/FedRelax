@@ -30,7 +30,7 @@ neighbours_models = {}
 neighbour_lists = []
 local_train_errors, local_val_errors = [], []
 all_train_errors, all_val_errors = [], []
-desired_num_pods = 5
+desired_num_pods = 20
 service_name = "processor-service"
 namespace = "fed-relax"
 port = 4000
@@ -183,7 +183,7 @@ def are_all_pods_ready():
         return False
 
 
-def add_edges_k8s(clients_attributes, nrneighbors=1):
+def add_edges_k8s(clients_attributes, nrneighbors=3):
     """
     Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
     using k-nearest neighbors approach.
@@ -232,7 +232,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=1):
+def FedRelax(G, regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -495,6 +495,7 @@ def main():
         time.sleep(10)
 
     # Send coordinates to all other pods
+    graph_construct_st = time.time()
     print("Broadcasting coordinates to other pods")
     coords_encoded = base64.b64encode(pickle.dumps(coords)).decode('utf-8')
     coord_update = {
@@ -514,17 +515,27 @@ def main():
         knn_graph = add_edges_k8s(all_client_coords)
         visualize_and_save_graph(knn_graph, '/app/knn_graph_{}.png'.format(my_pod_name))
 
+    graph_construct_end = time.time()
+    print("runtime of construct graph ",graph_construct_end-graph_construct_st)
+
     # Get neighbour list
     global neighbour_lists
     for node_j in knn_graph.neighbors(my_pod_name):
         neighbour_lists.append(f"http://{node_j}.{service_name}.{namespace}.svc.cluster.local:{port}/receive_models")
     print("The neighbour pods for current local pod are: ", neighbour_lists)
 
+    fed_relax_st = time.time()
     print("Running FedRelax algorithm...")
     final_model = FedRelax(knn_graph, regparam=0)
+    fed_relax_end = time.time()
+    print("runtime of FedRelax ",fed_relax_end-fed_relax_st)
+
+    evaluation_st = time.time()
     print("Evaluating final model")
     model_evaluation(final_model, None, '/app/local_mse_{}.png'.format(my_pod_name))
     all_model_evaluation('/app/all_errors_calculation.png')
+    evaluation_end = time.time()
+    print("runtime of evaluation ",evaluation_end-evaluation_st)
 
     print("Send all the attributes for aggregation to evaluate")
     final_model_encoded = base64.b64encode(pickle.dumps(final_model)).decode('utf-8')

@@ -8,7 +8,7 @@ spec:
     matchLabels:
       app: fedrelax-client
   serviceName: "processor-service"
-  replicas: 5
+  replicas: 20
   template:
     metadata:
       labels:

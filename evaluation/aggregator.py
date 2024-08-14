@@ -16,7 +16,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Initialize empty dictionary to store client attributes for model evaluation
 all_client_attributes = {}
 attributes_lock = threading.Lock()
-desired_num_pods = 5
+desired_num_pods = 20
 
 def decode_and_unpickle(encoded_data):
     try:
@@ -31,15 +31,15 @@ def decode_and_unpickle(encoded_data):
 def validation_graph():
     global all_client_attributes
     X_val = all_client_attributes.get("processor-0")["Xval"]
-    y_1 = all_client_attributes.get("processor-1")["model"].predict(X_val)
-    y_2 = all_client_attributes.get("processor-2")["model"].predict(X_val)
+    y_1 = all_client_attributes.get("processor-11")["model"].predict(X_val)
+    y_2 = all_client_attributes.get("processor-5")["model"].predict(X_val)
 
     # Plot the results
     plt.figure()
     plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
     plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-3")["Xval"], all_client_attributes.get("processor-2")["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-4")["Xval"], all_client_attributes.get("processor-1")["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-7")["Xval"], all_client_attributes.get("processor-0")["yval"], color="blue", label="validation data cluster 0", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-15")["Xval"], all_client_attributes.get("processor-11")["yval"], color="red", label="val data second cluster", linewidth=2)
     plt.savefig('/app/validation.png')
     print(f"Validation graph is successfully saved in /app/validation.png")
 
