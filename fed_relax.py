@@ -13,6 +13,7 @@ from kubernetes import client, config
 import networkx as nx
 from sklearn.neighbors import kneighbors_graph
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 # Initialize empty dictionary to store coords of nodes
 all_client_coords = {}
 # Initialize empty dictionary to store model updates of neighbours
-neighbours_models = {}
+neighbours_models = defaultdict(list)
 # Keep track on neighbour nodes
 neighbour_lists = []
 local_train_errors, local_val_errors = [], []
@@ -250,28 +251,28 @@ def FedRelax(G, regparam=0, maxiter=100):
         send_data(model_update, neighbour_lists)
 
         # Wait until all the models from neighbours are received
-        while len(neighbours_models) < len(neighbour_lists):
+        while len(neighbours_models[iter_GD]) < len(neighbour_lists):
+            print("Current neighbours_models", neighbours_models)
             time.sleep(90)
-        if len(neighbours_models) == len(neighbour_lists):
+        if len(neighbours_models[iter_GD]) == len(neighbour_lists):
             print("Received all models from neighbours: %s", neighbours_models)
 
-        # Update local model
-        for neighbour, attributes in neighbours_models.items():
-            nmodel = attributes["model"]
-            neighbourpred = nmodel.predict(Xtest).reshape(-1, 1)
-            neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
-            ytrain = np.vstack((ytrain, neighbourpred))
-            Xtrain = np.vstack((Xtrain, Xtest))
+        # Update lt[]ocal model
+        for model_attributes in neighbours_models[iter_GD]:
+            for neighbour, nmodel in model_attributes.items():
+                neighbourpred = nmodel.predict(Xtest).reshape(-1, 1)
+                neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+                ytrain = np.vstack((ytrain, neighbourpred))
+                Xtrain = np.vstack((Xtrain, Xtest))
 
-            # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
-            sampleweightaug = (regparam * len(ytrain) / testsize)
-            sample_weight_reshaped = sample_weight.reshape(-1, 1)
-            sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
+                # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
+                sampleweightaug = (regparam * len(ytrain) / testsize)
+                sample_weight_reshaped = sample_weight.reshape(-1, 1)
+                sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
 
         # Fit the local model with the augmented dataset and sample weights
         local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
         print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
-        neighbours_models.clear()
         model_evaluation(local_model,iter_GD)
     app.logger.debug("The FedRelax process is completed")
     return local_model
@@ -401,19 +402,18 @@ def receive_models():
             return jsonify({"error": "No 'iter' in received data."}), 400
         
         iter = decode_and_unpickle(iter_encoded)
-        if iter != current_iteration:
-            app.logger.error("Current iteration is not the same as received iteration: received=%s, current=%s", iter, current_iteration)
-            return jsonify({"Current iteration is not the same as received iteration."}), 400
-
         model = decode_and_unpickle(models_encoded)
         
         print(f"Received update from pod: {pod_name} with coordinates: {model}")
         app.logger.debug(f"Received update from pod: {pod_name} with coordinates: {model}")
 
-        pod_attributes = {"model": model}
+        pod_attributes = {pod_name: model}
         with attributes_lock:
             # Add the attributes to the global dictionary
-            neighbours_models[pod_name] = pod_attributes
+            if iter not in neighbours_models:
+                neighbours_models[iter] = []
+            neighbours_models[iter].append(pod_attributes)
+
             app.logger.debug(f"Updated neighbours_models: {neighbours_models}")
 
         print("Current neighbours_models:", neighbours_models)
