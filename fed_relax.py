@@ -92,13 +92,14 @@ ytrain = data["ytrain"]
 Xval = data["Xval"]
 yval = data["yval"]
 coords = data["coords"]
-Xtest = np.arange(0.0, 1, 0.1).reshape(-1, 1)
+# coords = np.array([np.mean(data["Xtrain"]), np.mean(data["ytrain"])])
+Xtest = np.arange(0.01, 10, 1)[:, np.newaxis]
 
 # Train a local model (replace with your actual model training)
 local_model = train_local_model(Xtrain, ytrain)
 
 # Get sample weights (e.g., set equal weights for all data points)
-sample_weight = np.ones(len(Xtrain))
+sample_weight = np.ones((len(ytrain), 1))
 
 def decode_and_unpickle(encoded_data):
     try:
@@ -108,23 +109,6 @@ def decode_and_unpickle(encoded_data):
     except Exception as e:
         app.logger.error("Error decoding and unpickling data: %s", e)
         raise
-
-def process_all_coords(coords_received):
-    global all_client_coords
-    print("Decoding data..")
-    try:
-        pod_name = coords_received['pod_name']
-        coords = decode_and_unpickle(coords_received['coords'])
-        print(f"Received update from pod: {pod_name} with {coords}")
-
-        pod_attributes = {"coords": coords}
-        with attributes_lock:
-            # Add the attributes to the global dictionary
-            all_client_coords[pod_name] = pod_attributes
-
-    except Exception as e:
-        app.logger.error("Error processing client attributes: %s", e)
-        return jsonify({"error": "An error occurred while processing client attributes"}), 500
 
 
 def send_data(client_update, pod_urls, max_retries=100000, retry_delay=20):
@@ -184,10 +168,9 @@ def are_all_pods_ready():
         return False
 
 
-def add_edges_k8s(clients_attributes, nrneighbors=3):
+def add_edges_k8s(clients_attributes, nrneighbors=4, refdistance=50):
     """
-    Add edges to the graph based on pod attributes retrieved from Kubernetes config maps
-    using k-nearest neighbors approach.
+    Add edges to the graph based on pod attributes using k-nearest neighbors approach.
     """
     # Initialize empty graph
     graph = nx.Graph()
@@ -205,6 +188,7 @@ def add_edges_k8s(clients_attributes, nrneighbors=3):
 
     # Calculate k-nearest neighbors graph
     A = kneighbors_graph(node_positions, n_neighbors=nrneighbors, mode='connectivity', include_self=False)
+    A = A.toarray()
 
     # Iterate over the k-nearest neighbors graph and add edges with weights
     for i in range(len(clients_attributes)):
@@ -215,9 +199,10 @@ def add_edges_k8s(clients_attributes, nrneighbors=3):
 
                 # Calculate the Euclidean distance between pods based on their positions
                 distance = np.linalg.norm(node_positions[i] - node_positions[j])
+                weight = np.exp(-distance / refdistance)
 
                 # Add edge with weight based on distance
-                graph.add_edge(pod_name_i, pod_name_j, weight=distance)
+                graph.add_edge(pod_name_i, pod_name_j, weight=weight)
 
     return graph
 
@@ -233,7 +218,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=100):
+def FedRelax(G, regparam=0, maxiter=10):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -257,18 +242,18 @@ def FedRelax(G, regparam=0, maxiter=100):
         if len(neighbours_models[iter_GD]) == len(neighbour_lists):
             print("Received all models from neighbours: %s", neighbours_models)
 
-        # Update lt[]ocal model
+        # Update local model
         for model_attributes in neighbours_models[iter_GD]:
             for neighbour, nmodel in model_attributes.items():
                 neighbourpred = nmodel.predict(Xtest).reshape(-1, 1)
-                neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
+                # neighbourpred = np.tile(neighbourpred, (1, len(ytrain[0])))
                 ytrain = np.vstack((ytrain, neighbourpred))
                 Xtrain = np.vstack((Xtrain, Xtest))
 
                 # Set sample weights of added local dataset according to edge weight and GTV regularization parameter
                 sampleweightaug = (regparam * len(ytrain) / testsize)
-                sample_weight_reshaped = sample_weight.reshape(-1, 1)
-                sample_weight = np.vstack((sample_weight_reshaped, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
+                # sample_weight_reshaped = sample_weight.reshape(-1, 1)
+                sample_weight = np.vstack((sample_weight, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
 
         # Fit the local model with the augmented dataset and sample weights
         local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
@@ -478,11 +463,12 @@ def all_model_evaluation(output_path):
     nodes = range(1, len(all_train_errors) + 1)
     plt.figure(figsize=(12, 6))
     plt.plot(nodes, all_train_errors, marker='o', color='blue', label='Training Error')
-    plt.plot(nodes, all_train_errors, marker='o', color='green', label='Validation Error')
+    plt.plot(nodes, all_val_errors, marker='o', color='green', label='Validation Error')
     plt.xlabel('Node')
     plt.ylabel('Mean Squared Error')
     plt.title('Training and Validation Errors Across Nodes')
     plt.xticks(nodes) 
+    plt.legend()
     plt.grid(True)
     plt.savefig(output_path)
     print(f"Image is successfully saved in {output_path}")
@@ -526,7 +512,7 @@ def main():
 
     fed_relax_st = time.time()
     print("Running FedRelax algorithm...")
-    final_model = FedRelax(knn_graph, regparam=0)
+    final_model = FedRelax(knn_graph, regparam=1.5)
     fed_relax_end = time.time()
     print("runtime of FedRelax ",fed_relax_end-fed_relax_st)
 
