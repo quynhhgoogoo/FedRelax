@@ -218,7 +218,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=10):
+def FedRelax(G, regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -433,7 +433,6 @@ def model_evaluation(model, iteration=None, output_path=None):
         plt.title(f'Training vs Validation Error over Iterations')
         plt.xlabel('Iteration')
         plt.ylabel('Mean Squared Error')
-        plt.legend()
         plt.savefig(output_path)
         print(f"Image is successfully saved in {output_path}")
         all_train_errors.append(trainerr)
@@ -467,8 +466,8 @@ def all_model_evaluation(output_path):
     plt.xlabel('Node')
     plt.ylabel('Mean Squared Error')
     plt.title('Training and Validation Errors Across Nodes')
-    plt.xticks(nodes) 
     plt.legend()
+    plt.xticks(nodes)
     plt.grid(True)
     plt.savefig(output_path)
     print(f"Image is successfully saved in {output_path}")
