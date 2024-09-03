@@ -36,10 +36,10 @@ def validation_graph():
 
     # Plot the results
     plt.figure()
-    plt.plot(X_val, y_1, color="orange", label="validation data cluster 0", linewidth=2)
-    plt.plot(X_val, y_2, color="green", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-7")["Xval"], all_client_attributes.get("processor-0")["yval"], color="blue", label="validation data cluster 0", linewidth=2)
-    plt.plot(all_client_attributes.get("processor-15")["Xval"], all_client_attributes.get("processor-11")["yval"], color="red", label="val data second cluster", linewidth=2)
+    plt.plot(X_val, y_1, color="orange", label="Model at Node 11 Predictions", linewidth=2)
+    plt.plot(X_val, y_2, color="green", label="Model at Node 5 Predictions", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-8")["Xval"], all_client_attributes.get("processor-0")["yval"], color="blue", label="Actual Validation Data for Node 8", linewidth=2)
+    plt.plot(all_client_attributes.get("processor-15")["Xval"], all_client_attributes.get("processor-11")["yval"], color="red", label="Actual Validation Data for Node 15", linewidth=2)
     plt.title("Comparison of Model Predictions and Actual Validation Data", fontsize=14)
     plt.xlabel("Validation Feature Data (X_val)", fontsize=12)
     plt.ylabel("Predicted/Actual Values", fontsize=12)
