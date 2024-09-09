@@ -198,7 +198,7 @@ def add_edges_k8s(clients_attributes, nrneighbors=4, refdistance=50):
                 pod_name_j = list(clients_attributes.keys())[j]
 
                 # Calculate the Euclidean distance between pods based on their positions
-                distance = np.linalg.norm(node_positions[i] - node_positions[j])
+                distance = np.linalg.norm(node_positions[i] - node_positions[j], 2)
                 weight = np.exp(-distance / refdistance)
 
                 # Add edge with weight based on distance
@@ -218,7 +218,7 @@ def visualize_and_save_graph(graph, output_path):
     plt.show()  # Display the graph
 
 
-def FedRelax(G, regparam=0, maxiter=10):
+def FedRelax(G, regparam=0, maxiter=100):
     # Determine the number of data points in the test set
     global neighbours_models, local_model, Xtrain, ytrain, Xtest, sample_weight, current_iteration
     testsize = Xtest.shape[0]
@@ -255,10 +255,10 @@ def FedRelax(G, regparam=0, maxiter=10):
                 # sample_weight_reshaped = sample_weight.reshape(-1, 1)
                 sample_weight = np.vstack((sample_weight, sampleweightaug * G.edges[(my_pod_name, neighbour)]["weight"] * np.ones((len(neighbourpred), 1))))
 
-        # Fit the local model with the augmented dataset and sample weights
-        local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
-        print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
-        model_evaluation(local_model,iter_GD)
+            # Fit the local model with the augmented dataset and sample weights
+            local_model.fit(Xtrain, ytrain, sample_weight=sample_weight.reshape(-1))
+            print("Local model has been trained with augmented dataset and sample weights, current counter: ", iter_GD)
+            model_evaluation(local_model,iter_GD)
     app.logger.debug("The FedRelax process is completed")
     return local_model
 
@@ -430,9 +430,11 @@ def model_evaluation(model, iteration=None, output_path=None):
         plt.plot(range(1, len(local_val_errors) + 1), local_val_errors, label='Validation Error', marker='o')
         
         # Add title and labels
-        plt.title(f'Training vs Validation Error over Iterations')
-        plt.xlabel('Iteration')
-        plt.ylabel('Mean Squared Error')
+        plt.title(f'Training vs Validation Error over Iterations', fontsize=22)
+        plt.xlabel('Iteration', fontsize=20)
+        plt.ylabel('Mean Squared Error', fontsize=20)
+        plt.tick_params(axis='both', which='major', labelsize=20)
+        plt.tick_params(axis='both', which='minor', labelsize=20) 
         plt.savefig(output_path)
         print(f"Image is successfully saved in {output_path}")
         all_train_errors.append(trainerr)
